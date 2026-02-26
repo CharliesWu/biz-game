@@ -32,12 +32,12 @@ class Company:
         return low_p, high_p
 
     def get_multiplier_data(self, current_round):
-        mult, active = 1.0, "No"
+        mult, active_from_past = 1.0, False
         for start in self.factory_effects:
             if current_round >= start:
                 mult *= 1.1
-                active = "Yes"
-        return mult, active
+                active_from_past = True
+        return mult, active_from_past
 
     def get_current_pe(self):
         pe = 10 + self.extra_pe
@@ -92,6 +92,11 @@ class SimulationEngine:
             d = self.round_decisions[name]
             cost = (3000000 if d['vi']=='Manufacturing' else 0) + (1500000 if d['vi']=='Software' else 0) + (5000000 if d['build_factory'] else 0)
             
+            # FACTORY LOGIC: Show "Yes" if built now OR if active from the past
+            _, fac_active_from_past = comp.get_multiplier_data(self.current_round)
+            fac_display = "Yes" if (d['build_factory'] or fac_active_from_past) else "No"
+
+            # Investment scheduling (Profit/Capacity timing remains unchanged)
             if d['vi'] == 'Manufacturing': comp.mfg_effects.append((self.current_round + 1, self.current_round + 2, 100, 200))
             if d['vi'] == 'Software': 
                 comp.soft_effects.append((self.current_round + 1, 5, 10))
@@ -110,12 +115,11 @@ class SimulationEngine:
             
             if comp.cash < 0: comp.is_bankrupt = True
             
-            _, fac_active = comp.get_multiplier_data(self.current_round)
             curr_pe = comp.get_current_pe()
 
             round_results.append({
                 'Name': name, 'Profit_t': net, 'Cash_t': comp.cash, 'Total Share': comp.last_total_share, 
-                'Low Share': l_share, 'High Share': h_share, 'PE': curr_pe, 'Factory': fac_active, 'Est Price': net * curr_pe
+                'Low Share': l_share, 'High Share': h_share, 'PE': curr_pe, 'Factory': fac_display, 'Est Price': net * curr_pe
             })
 
         df = pd.DataFrame(round_results)
@@ -179,7 +183,7 @@ if not game.game_over:
             st.write(f"### 📝 {user_team} Strategy Entry")
             l_ratio = st.slider("Low-End Market Focus (%)", 0.0, 1.0, 0.5, 0.05)
             vi = st.selectbox("Vertical Integration Investment", ["None", "Manufacturing", "Software"])
-            fac = st.checkbox("Build New Factory (-5,000,000)")
+            fac = st.checkbox("Build Factory (-5,000,000)")
             if st.form_submit_button("Submit Strategy to Server"):
                 game.submit_team_decision(user_team, {"low_ratio": l_ratio, "high_ratio": 1.0 - l_ratio, "vi": vi, "build_factory": fac})
                 st.rerun()
@@ -194,7 +198,6 @@ if game.history:
     st.write("## 📊 Round Results Dashboard")
     for i, rep in enumerate(reversed(game.history)):
         st.write(f"**Round {len(game.history) - i} Performance**")
-        # Define exact column order for the dashboard
         cols_to_show = ['Name', 'Low Share', 'High Share', 'Total Share', 'Profit_t', 'Cash_t', 'PE', 'Factory', 'Share Rank', 'Price Rank']
         st.table(rep[cols_to_show].style.format({
             "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}",
