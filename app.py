@@ -88,7 +88,7 @@ class SimulationEngine:
                 round_results.append({
                     'Team': name, 'Op Profit': 0.0, 'Net Profit': 0.0, 'Cash Balance': comp.cash, 
                     'Total Share': 0.0, 'Low Share': 0.0, 'High Share': 0.0, 
-                    'PE': 0.0, 'Factory': 'Bankrupt', 'Est Price': 0.0
+                    'PE': 0.0, 'Factory': 'Bankrupt', 'Market Cap': 0.0
                 })
                 continue
 
@@ -116,7 +116,7 @@ class SimulationEngine:
                 comp.ever_had_consecutive_loss = True
             comp.last_round_net_profit = net_profit # Store for next round check
 
-            # VALUATION (Est Price = Max(0, Op Profit * PE))
+            # VALUATION (Market Cap = Max(0, Op Profit * PE))
             est_price = max(0.0, op_profit * comp.get_display_pe())
 
             # Investment scheduling
@@ -135,12 +135,12 @@ class SimulationEngine:
                 'Team': name, 'Op Profit': op_profit, 'Net Profit': net_profit, 
                 'Cash Balance': comp.cash, 'Total Share': (act_l * low_market + act_h * high_market) / 100000, 
                 'Low Share': act_l, 'High Share': act_h, 
-                'PE': comp.get_display_pe(), 'Factory': fac_display, 'Est Price': est_price
+                'PE': comp.get_display_pe(), 'Factory': fac_display, 'Market Cap': est_price
             })
 
         df = pd.DataFrame(round_results)
         df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
-        df['Price Rank'] = df['Est Price'].rank(ascending=False, method='min').astype(int)
+        df['Price Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
         
         self.history.append(df)
         self.submitted_teams, self.round_decisions = set(), {}
@@ -220,14 +220,14 @@ if game.history:
     st.write(f"## 📈 Market Dashboard: Round {len(game.history)} Results")
     latest = game.history[-1]
     
-    # Financial Flow Diagram Concept: Op Profit -> Est Price, Net Profit -> Cash
+    # Financial Flow Diagram Concept: Op Profit -> Market Cap, Net Profit -> Cash
     # 
     
-    cols_to_show = ['Team', 'Low Share', 'High Share', 'Total Share', 'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 'Factory', 'Est Price', 'Share Rank', 'Price Rank']
+    cols_to_show = ['Team', 'Low Share', 'High Share', 'Total Share', 'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 'Factory', 'Market Cap', 'Share Rank', 'Price Rank']
     st.table(latest[cols_to_show].style.format({
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
         "Op Profit": "${:,.0f}", "Net Profit": "${:,.0f}", "Cash Balance": "${:,.0f}", 
-        "PE": "{:.1f}", "Est Price": "${:,.0f}"
+        "PE": "{:.1f}", "Market Cap": "${:,.0f}"
     }))
 
 # --- TEAM INPUT (Only for Teams) ---
