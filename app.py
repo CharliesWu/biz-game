@@ -84,8 +84,15 @@ class SimulationEngine:
                 round_results.append({'Name': name, 'Profit_t': 0, 'Cash_t': comp.cash, 'Total Share': 0, 'Status': 'Bankrupt', 'Low Share': 0, 'High Share': 0, 'PE': 0, 'Factory': 'N/A', 'Est Price': 0})
                 continue
 
-            l_share = w_low[name]/s_low if s_low > 0 else 0.25
-            h_share = w_high[name]/s_high if s_high > 0 else 0.25
+            # 先算当轮竞争份额
+            new_l_share = w_low[name]/s_low if s_low > 0 else 0.25
+            new_h_share = w_high[name]/s_high if s_high > 0 else 0.25
+
+            # 简单惯性：保留上一轮的一部分
+            retain = 0.6  # 惯性强度：0.6~0.7 更像真实，0.4~0.5 更像游戏
+            l_share = retain * comp.prev_low_share + (1-retain) * new_l_share
+            h_share = retain * comp.prev_high_share + (1-retain) * new_h_share
+
             u_l, u_h = comp.get_unit_profit(self.current_round)
             gross = (l_share * low_market * u_l) + (h_share * high_market * u_h)
             
