@@ -17,7 +17,7 @@ class Company:
         self.factory_effects = [] 
         self.last_round_profit = 0
         
-        # INERTIA: Initial market share at Round 0 is assumed 25% for all
+        # INERTIA: Initialize Round 0 shares at 25% for all
         self.prev_low_share = 0.25
         self.prev_high_share = 0.25
         self.last_total_share = 0.25
@@ -93,29 +93,31 @@ class SimulationEngine:
                 round_results.append({
                     'Name': name, 'Profit_t': 0.0, 'Cash_t': comp.cash, 'Total Share': 0.0, 
                     'Low Share': 0.0, 'High Share': 0.0, 'PE': 0.0, 'Factory': 'N/A', 
-                    'Est Price': 0.0, 'Share Rank': 4, 'Price Rank': 4
+                    'Est Price': 0.0
                 })
                 continue
 
             # Theoretical New Share
-            share_low_new = w_low[name]/s_low_total if s_low_total > 0 else 0.25
-            share_high_new = w_high[name]/s_high_total if s_high_total > 0 else 0.25
+            new_l = w_low[name]/s_low_total if s_low_total > 0 else 0.25
+            new_h = w_high[name]/s_high_total if s_high_total > 0 else 0.25
             
             # Actual Share = 0.6 * Prev + 0.4 * New
-            actual_low = (self.alpha * comp.prev_low_share) + ((1 - self.alpha) * share_low_new)
-            actual_high = (self.alpha * comp.prev_high_share) + ((1 - self.alpha) * share_high_new)
+            act_l = (self.alpha * comp.prev_low_share) + ((1 - self.alpha) * new_l)
+            act_h = (self.alpha * comp.prev_high_share) + ((1 - self.alpha) * new_h)
             
-            # Update for next round
-            comp.prev_low_share, comp.prev_high_share = actual_low, actual_high
+            # Save for next round
+            comp.prev_low_share, comp.prev_high_share = act_l, act_h
             
             # Financials
             u_l, u_h = comp.get_unit_profit(self.current_round)
-            gross = (actual_low * low_market * u_l) + (actual_high * high_market * u_h)
+            gross = (act_l * low_market * u_l) + (act_h * high_market * u_h)
             
             d = self.round_decisions[name]
-            cost = (3000000 if d['vi']=='Manufacturing' else 0) + (1500000 if d['vi']=='Software' else 0) + (5000000 if d['build_factory'] else 0)
+            cost = (3000000 if d['vi']=='Manufacturing' else 0) + \
+                   (1500000 if d['vi']=='Software' else 0) + \
+                   (5000000 if d['build_factory'] else 0)
             
-            # Factory Display Logic: Show "Yes" if building now OR if active from past
+            # Factory Display: "Yes" if built now OR active from past
             _, active_past = comp.get_multiplier_data(self.current_round)
             fac_display = "Yes" if (d['build_factory'] or active_past) else "No"
 
@@ -129,7 +131,7 @@ class SimulationEngine:
             net = gross - cost
             comp.cash += net
             comp.last_round_profit = net
-            total_share = (actual_low * low_market + actual_high * high_market) / 100000
+            total_share = (act_l * low_market + act_h * high_market) / 100000
             comp.last_total_share = total_share
             
             if net < 0:
@@ -141,13 +143,14 @@ class SimulationEngine:
             
             round_results.append({
                 'Name': name, 'Profit_t': net, 'Cash_t': comp.cash, 'Total Share': total_share, 
-                'Low Share': actual_low, 'High Share': actual_high, 'PE': comp.get_current_pe(), 
+                'Low Share': act_l, 'High Share': act_h, 'PE': comp.get_current_pe(), 
                 'Factory': fac_display, 'Est Price': net * comp.get_current_pe()
             })
 
         df = pd.DataFrame(round_results)
         df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
         df['Price Rank'] = df['Est Price'].rank(ascending=False, method='min').astype(int)
+        
         self.history.append(df)
         self.submitted_teams, self.round_decisions = set(), {}
         if self.current_round >= 4: self.game_over = True
@@ -171,20 +174,20 @@ class SimulationEngine:
 def get_shared_game(): return SimulationEngine()
 game = get_shared_game()
 
-st.set_page_config(page_title="Automotive Strategy Sim", layout="wide")
+st.set_page_config(page_title="Multiplayer Strategy Sim", layout="wide")
 st.title("🚗 Global Automotive Strategy Simulation")
 
 st.sidebar.title("Player Portal")
 user_team = st.sidebar.selectbox("Identify Your Team", ["--- Select ---", "Team 1", "Team 2", "Team 3", "Team 4"])
 if user_team == "--- Select ---":
-    st.info("Select your team in the sidebar to enter.")
+    st.info("Please select your team in the sidebar to enter.")
     st.stop()
-if st.sidebar.button("🔄 Refresh Data"): st.rerun()
+if st.sidebar.button("🔄 Sync/Refresh Data"): st.rerun()
 
-st.subheader(f"Round {game.current_round} / 4")
+st.subheader(f"Status: Round {game.current_round} / 4")
 cols = st.columns(4)
 for i, t in enumerate(game.teams):
-    s = "✅ Ready" if t in game.submitted_teams else "⏳ Thinking..."
+    s = "✅ Submitted" if t in game.submitted_teams else "⏳ Thinking..."
     if game.companies[t].is_bankrupt: s = "💀 Bankrupt"
     cols[i].metric(t, s)
 
@@ -200,7 +203,7 @@ if not game.game_over:
             st.write(f"### {user_team} Input")
             l = st.slider("Low-End Market Focus (%)", 0.0, 1.0, 0.5, 0.05)
             vi = st.selectbox("VI Investment", ["None", "Manufacturing", "Software"])
-            fac = st.checkbox("Build Factory (-5M)")
+            fac = st.checkbox("Build Factory (-5,000,000)")
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(user_team, {"low_ratio": l, "high_ratio": 1.0 - l, "vi": vi, "build_factory": fac})
                 st.rerun()
@@ -212,14 +215,18 @@ if len(game.submitted_teams) == 4 and not game.game_over:
             st.rerun()
 
 if game.history:
-    st.write("## 📊 Dashboard")
+    st.write("## 📊 Round Results Dashboard")
     latest = game.history[-1]
+    # Exact column names defined in run_market_logic
     cols_to_show = ['Name', 'Low Share', 'High Share', 'Total Share', 'Profit_t', 'Cash_t', 'PE', 'Factory', 'Share Rank', 'Price Rank']
-    st.table(latest[cols_to_show].style.format({"Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", "Profit_t": "{:,.0f}", "Cash_t": "{:,.0f}", "PE": "{:.1f}"}))
+    st.table(latest[cols_to_show].style.format({
+        "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
+        "Profit_t": "{:,.0f}", "Cash_t": "{:,.0f}", "PE": "{:.1f}"
+    }))
 
 if game.game_over:
     st.header("🏆 Final Standings")
     st.table(game.get_final_scores().style.format({"Final_Share": "{:.2%}", "Price": "{:,.0f}", "Score": "{:.4f}"}))
-    if st.sidebar.button("Reset Game"):
+    if st.sidebar.button("Reset Entire Global Game"):
         st.cache_resource.clear()
         st.rerun()
