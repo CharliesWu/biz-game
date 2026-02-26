@@ -17,7 +17,7 @@ class Company:
         self.factory_effects = [] 
         self.last_round_profit = 0
         
-        # INERTIA: Initialize Round 0 shares at 25% for all
+        # INERTIA: Round 0 shares at 25%
         self.prev_low_share = 0.25
         self.prev_high_share = 0.25
         self.last_total_share = 0.25
@@ -56,7 +56,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6  # Retention Coefficient
+        self.alpha = 0.6 
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -69,7 +69,6 @@ class SimulationEngine:
         low_market, high_market = 80000, 20000
         round_results = []
         
-        # 1. Calculate Theoretical Competitive Share (Share_new)
         w_low, w_high = {}, {}
         for name in self.teams:
             comp = self.companies[name]
@@ -84,44 +83,31 @@ class SimulationEngine:
         s_low_total = sum(w_low.values())
         s_high_total = sum(w_high.values())
 
-        # 2. Process Actual Shares with Market Inertia
         for name in self.teams:
             comp = self.companies[name]
-            
             if comp.is_bankrupt:
                 comp.prev_low_share, comp.prev_high_share = 0.0, 0.0
                 round_results.append({
                     'Name': name, 'Profit_t': 0.0, 'Cash_t': comp.cash, 'Total Share': 0.0, 
-                    'Low Share': 0.0, 'High Share': 0.0, 'PE': 0.0, 'Factory': 'N/A', 
-                    'Est Price': 0.0
+                    'Low Share': 0.0, 'High Share': 0.0, 'PE': 0.0, 'Factory': 'N/A', 'Est Price': 0.0
                 })
                 continue
 
-            # Theoretical New Share
             new_l = w_low[name]/s_low_total if s_low_total > 0 else 0.25
             new_h = w_high[name]/s_high_total if s_high_total > 0 else 0.25
-            
-            # Actual Share = 0.6 * Prev + 0.4 * New
             act_l = (self.alpha * comp.prev_low_share) + ((1 - self.alpha) * new_l)
             act_h = (self.alpha * comp.prev_high_share) + ((1 - self.alpha) * new_h)
             
-            # Save for next round
             comp.prev_low_share, comp.prev_high_share = act_l, act_h
             
-            # Financials
             u_l, u_h = comp.get_unit_profit(self.current_round)
             gross = (act_l * low_market * u_l) + (act_h * high_market * u_h)
-            
             d = self.round_decisions[name]
-            cost = (3000000 if d['vi']=='Manufacturing' else 0) + \
-                   (1500000 if d['vi']=='Software' else 0) + \
-                   (5000000 if d['build_factory'] else 0)
+            cost = (3000000 if d['vi']=='Manufacturing' else 0) + (1500000 if d['vi']=='Software' else 0) + (5000000 if d['build_factory'] else 0)
             
-            # Factory Display: "Yes" if built now OR active from past
             _, active_past = comp.get_multiplier_data(self.current_round)
             fac_display = "Yes" if (d['build_factory'] or active_past) else "No"
 
-            # Investment scheduling
             if d['vi'] == 'Manufacturing': comp.mfg_effects.append((self.current_round + 1, self.current_round + 2, 100, 200))
             if d['vi'] == 'Software': 
                 comp.soft_effects.append((self.current_round + 1, 5, 10))
@@ -138,7 +124,6 @@ class SimulationEngine:
                 comp.current_loss_streak += 1
                 if comp.current_loss_streak >= 2: comp.loss_penalty = True
             else: comp.current_loss_streak = 0
-            
             if comp.cash < 0: comp.is_bankrupt = True
             
             round_results.append({
@@ -150,7 +135,6 @@ class SimulationEngine:
         df = pd.DataFrame(round_results)
         df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
         df['Price Rank'] = df['Est Price'].rank(ascending=False, method='min').astype(int)
-        
         self.history.append(df)
         self.submitted_teams, self.round_decisions = set(), {}
         if self.current_round >= 4: self.game_over = True
@@ -169,64 +153,85 @@ class SimulationEngine:
         df['Score'] = 0.5*(df['Final_Share']/(ms if ms>0 else 1)) + 0.5*(df['Price']/(mp if mp>0 else 1))
         return df.sort_values('Score', ascending=False)
 
-# --- STREAMLIT UI ---
+# ==========================================
+# 2. STREAMLIT UI
+# ==========================================
+
 @st.cache_resource
 def get_shared_game(): return SimulationEngine()
 game = get_shared_game()
 
-st.set_page_config(page_title="Multiplayer Strategy Sim", layout="wide")
-st.title("🚗 Global Automotive Strategy Simulation")
+st.set_page_config(page_title="Teacher Dashboard", layout="wide")
+st.title("🚗 Automotive Market Simulation: Teacher God-View")
 
-st.sidebar.title("Player Portal")
-user_team = st.sidebar.selectbox("Identify Your Team", ["--- Select ---", "Team 1", "Team 2", "Team 3", "Team 4"])
-if user_team == "--- Select ---":
-    st.info("Please select your team in the sidebar to enter.")
+# --- SIDEBAR LOGIC ---
+st.sidebar.title("Login Settings")
+user_role = st.sidebar.selectbox("Select Your Role", ["--- Select ---", "Teacher/Observer", "Team 1", "Team 2", "Team 3", "Team 4"])
+
+if user_role == "--- Select ---":
+    st.info("👋 Welcome! Please select your team or the Observer role in the sidebar.")
     st.stop()
-if st.sidebar.button("🔄 Sync/Refresh Data"): st.rerun()
 
-st.subheader(f"Status: Round {game.current_round} / 4")
+if st.sidebar.button("🔄 Force Global Sync"): st.rerun()
+
+# --- TEACHER EXCLUSIVE: RESET BUTTON ---
+if user_role == "Teacher/Observer":
+    st.sidebar.divider()
+    st.sidebar.warning("⚠️ Teacher Authority")
+    if st.sidebar.button("🚨 RESET ENTIRE GAME"):
+        st.cache_resource.clear()
+        st.rerun()
+
+# --- HEADER: GAME PROGRESS ---
+st.subheader(f"Simulation Status: Round {game.current_round} / 4")
 cols = st.columns(4)
 for i, t in enumerate(game.teams):
-    s = "✅ Submitted" if t in game.submitted_teams else "⏳ Thinking..."
-    if game.companies[t].is_bankrupt: s = "💀 Bankrupt"
+    s = "✅ Submitted" if t in game.submitted_teams else "⏳ Waiting..."
+    if game.companies[t].is_bankrupt: s = "💀 BANKRUPT"
     cols[i].metric(t, s)
 
 st.divider()
 
-if not game.game_over:
-    if user_team in game.submitted_teams:
-        st.success(f"Strategy for {user_team} locked. Waiting for others...")
-    elif game.companies[user_team].is_bankrupt:
-        st.error("Company bankrupt.")
-    else:
-        with st.form("input_form"):
-            st.write(f"### {user_team} Input")
-            l = st.slider("Low-End Market Focus (%)", 0.0, 1.0, 0.5, 0.05)
-            vi = st.selectbox("VI Investment", ["None", "Manufacturing", "Software"])
-            fac = st.checkbox("Build Factory (-5,000,000)")
-            if st.form_submit_button("Submit Strategy"):
-                game.submit_team_decision(user_team, {"low_ratio": l, "high_ratio": 1.0 - l, "vi": vi, "build_factory": fac})
-                st.rerun()
-
-if len(game.submitted_teams) == 4 and not game.game_over:
-    if st.button("🚀 Calculate Results"):
-        if game.run_market_logic():
-            st.balloons()
-            st.rerun()
-
+# --- DASHBOARD (Main Screen for Students to See) ---
 if game.history:
-    st.write("## 📊 Round Results Dashboard")
+    st.write("## 📈 Global Results Dashboard")
     latest = game.history[-1]
-    # Exact column names defined in run_market_logic
     cols_to_show = ['Name', 'Low Share', 'High Share', 'Total Share', 'Profit_t', 'Cash_t', 'PE', 'Factory', 'Share Rank', 'Price Rank']
     st.table(latest[cols_to_show].style.format({
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
         "Profit_t": "{:,.0f}", "Cash_t": "{:,.0f}", "PE": "{:.1f}"
     }))
+else:
+    st.info("Round 1 has not yet been processed. Waiting for all team strategies.")
 
+# --- INTERFACE FOR TEAMS ---
+if user_role != "Teacher/Observer" and not game.game_over:
+    if user_role in game.submitted_teams:
+        st.success(f"Strategy for {user_role} is locked. Results will appear after calculation.")
+    elif game.companies[user_role].is_bankrupt:
+        st.error("Access Denied: Your company is bankrupt.")
+    else:
+        with st.form("input_form"):
+            st.write(f"### 📝 {user_role}: Input Strategy for Round {game.current_round}")
+            l = st.slider("Low-End Market Focus (%)", 0.0, 1.0, 0.5, 0.05)
+            vi = st.selectbox("VI Investment", ["None", "Manufacturing", "Software"])
+            fac = st.checkbox("Build Factory (-5,000,000)")
+            if st.form_submit_button("Submit Strategy"):
+                game.submit_team_decision(user_role, {"low_ratio": l, "high_ratio": 1.0 - l, "vi": vi, "build_factory": fac})
+                st.rerun()
+
+# --- TEACHER TRIGGER: CALCULATE ---
+if len(game.submitted_teams) == 4 and not game.game_over:
+    st.warning("All teams have submitted! Observer, click the button below to process.")
+    # Show calculation button ONLY to teacher if you want, or leave it for anyone.
+    if user_role == "Teacher/Observer":
+        if st.button("🚀 EXECUTE MARKET CALCULATION"):
+            if game.run_market_logic():
+                st.balloons()
+                st.rerun()
+
+# --- FINAL RESULTS ---
 if game.game_over:
-    st.header("🏆 Final Standings")
+    st.divider()
+    st.header("🏆 Final Championship Leaderboard")
     st.table(game.get_final_scores().style.format({"Final_Share": "{:.2%}", "Price": "{:,.0f}", "Score": "{:.4f}"}))
-    if st.sidebar.button("Reset Entire Global Game"):
-        st.cache_resource.clear()
-        st.rerun()
