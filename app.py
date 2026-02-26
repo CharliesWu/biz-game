@@ -53,7 +53,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 
+        self.alpha = 0.55
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
