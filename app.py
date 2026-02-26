@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import time
 
 # ==========================================
 # 1. CORE BUSINESS LOGIC
@@ -17,7 +16,11 @@ class Company:
         self.soft_effects = []  
         self.factory_effects = [] 
         self.last_round_profit = 0
-        self.last_total_share = 0
+        
+        # INERTIA TRACKING: Initialize with an even split (0.25) for Round 0
+        self.prev_low_share = 0.25
+        self.prev_high_share = 0.25
+        self.last_total_share = 0.25
 
     def get_unit_profit(self, current_round):
         low_p, high_p = 500, 1000
@@ -53,6 +56,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
+        self.alpha = 0.6  # Market Retention Coefficient
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -65,6 +69,7 @@ class SimulationEngine:
         low_market, high_market = 80000, 20000
         round_results = []
         
+        # 1. Calculate Theoretical "Share_new" (Competitive Share)
         w_low, w_high = {}, {}
         for name in self.teams:
             comp = self.companies[name]
@@ -76,34 +81,45 @@ class SimulationEngine:
                 w_low[name] = d['low_ratio'] * m
                 w_high[name] = d['high_ratio'] * m
 
-        s_low, s_high = sum(w_low.values()), sum(w_high.values())
+        s_low_total = sum(w_low.values())
+        s_high_total = sum(w_high.values())
 
+        # 2. Process Actual Shares using Inertia Formula
         for name in self.teams:
             comp = self.companies[name]
             if comp.is_bankrupt:
-                round_results.append({'Name': name, 'Profit_t': 0, 'Cash_t': comp.cash, 'Total Share': 0, 'Status': 'Bankrupt', 'Low Share': 0, 'High Share': 0, 'PE': 0, 'Factory': 'N/A', 'Est Price': 0})
+                round_results.append({
+                    'Name': name, 'Profit_t': 0, 'Cash_t': comp.cash, 'Total Share': 0, 
+                    'Status': 'Bankrupt', 'Low Share': 0, 'High Share': 0, 'PE': 0, 'Factory': 'N/A', 'Est Price': 0
+                })
+                # If bankrupt, they lose their historical inertia for future rounds
+                comp.prev_low_share, comp.prev_high_share = 0, 0
                 continue
 
-            # 先算当轮竞争份额
-            new_l_share = w_low[name]/s_low if s_low > 0 else 0.25
-            new_h_share = w_high[name]/s_high if s_high > 0 else 0.25
-
-            # 简单惯性：保留上一轮的一部分
-            retain = 0.6  # 惯性强度：0.6~0.7 更像真实，0.4~0.5 更像游戏
-            l_share = retain * comp.prev_low_share + (1-retain) * new_l_share
-            h_share = retain * comp.prev_high_share + (1-retain) * new_h_share
-
+            # Calculate Theoretical Share (Share_new)
+            share_low_new = w_low[name]/s_low_total if s_low_total > 0 else 0.25
+            share_high_new = w_high[name]/s_high_total if s_high_total > 0 else 0.25
+            
+            # Apply Inertia Formula: Share_t = alpha * Share_t-1 + (1 - alpha) * Share_new
+            actual_low_share = (self.alpha * comp.prev_low_share) + ((1 - self.alpha) * share_low_new)
+            actual_high_share = (self.alpha * comp.prev_high_share) + ((1 - self.alpha) * share_high_new)
+            
+            # Update history for next round
+            comp.prev_low_share = actual_low_share
+            comp.prev_high_share = actual_high_share
+            
+            # Financials
             u_l, u_h = comp.get_unit_profit(self.current_round)
-            gross = (l_share * low_market * u_l) + (h_share * high_market * u_h)
+            gross = (actual_low_share * low_market * u_l) + (actual_high_share * high_market * u_h)
             
             d = self.round_decisions[name]
             cost = (3000000 if d['vi']=='Manufacturing' else 0) + (1500000 if d['vi']=='Software' else 0) + (5000000 if d['build_factory'] else 0)
             
-            # FACTORY LOGIC: Show "Yes" if built now OR if active from the past
-            _, fac_active_from_past = comp.get_multiplier_data(self.current_round)
-            fac_display = "Yes" if (d['build_factory'] or fac_active_from_past) else "No"
+            # Dashboard: Factory Display (Built now or Active from past)
+            _, fac_active_past = comp.get_multiplier_data(self.current_round)
+            fac_display = "Yes" if (d['build_factory'] or fac_active_past) else "No"
 
-            # Investment scheduling (Profit/Capacity timing remains unchanged)
+            # Investment Logic
             if d['vi'] == 'Manufacturing': comp.mfg_effects.append((self.current_round + 1, self.current_round + 2, 100, 200))
             if d['vi'] == 'Software': 
                 comp.soft_effects.append((self.current_round + 1, 5, 10))
@@ -113,7 +129,8 @@ class SimulationEngine:
             net = gross - cost
             comp.cash += net
             comp.last_round_profit = net
-            comp.last_total_share = (l_share * low_market + h_share * high_market) / 100000
+            total_share = (actual_low_share * low_market + actual_high_share * high_market) / 100000
+            comp.last_total_share = total_share
             
             if net < 0:
                 comp.current_loss_streak += 1
@@ -125,8 +142,9 @@ class SimulationEngine:
             curr_pe = comp.get_current_pe()
 
             round_results.append({
-                'Name': name, 'Profit_t': net, 'Cash_t': comp.cash, 'Total Share': comp.last_total_share, 
-                'Low Share': l_share, 'High Share': h_share, 'PE': curr_pe, 'Factory': fac_display, 'Est Price': net * curr_pe
+                'Name': name, 'Profit_t': net, 'Cash_t': comp.cash, 'Total Share': total_share, 
+                'Low Share': actual_low_share, 'High Share': actual_high_share, 'PE': curr_pe, 
+                'Factory': fac_display, 'Est Price': net * curr_pe
             })
 
         df = pd.DataFrame(round_results)
@@ -160,7 +178,7 @@ game = get_shared_game()
 # ==========================================
 # 3. MULTIPLAYER UI
 # ==========================================
-st.set_page_config(page_title="Multiplayer Strategy Sim", layout="wide")
+st.set_page_config(page_title="Strategic Management Sim", layout="wide")
 st.title("🚗 Global Automotive Strategy Simulation")
 
 st.sidebar.title("Player Portal")
@@ -204,7 +222,7 @@ if len(game.submitted_teams) == 4:
 if game.history:
     st.write("## 📊 Round Results Dashboard")
     for i, rep in enumerate(reversed(game.history)):
-        st.write(f"**Round {len(game.history) - i} Performance**")
+        st.write(f"### Round {len(game.history) - i} Performance")
         cols_to_show = ['Name', 'Low Share', 'High Share', 'Total Share', 'Profit_t', 'Cash_t', 'PE', 'Factory', 'Share Rank', 'Price Rank']
         st.table(rep[cols_to_show].style.format({
             "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}",
@@ -212,7 +230,7 @@ if game.history:
         }))
 
 if game.game_over:
-    st.header("🏆 Final Results")
+    st.header("🏆 Final Standings")
     final = game.get_final_scores()
     st.table(final.style.format({"Final_Share": "{:.2%}", "Price": "{:,.2f}", "Score": "{:.4f}"}))
     if st.sidebar.button("Reset Entire Global Game"):
