@@ -37,7 +37,7 @@ class Company:
         mult, active_from_past = 1.0, False
         for start in self.factory_effects:
             if current_round >= start:
-                mult *= 1.1
+                mult *= 1.05
                 active_from_past = True
         return mult, active_from_past
 
@@ -118,7 +118,7 @@ class SimulationEngine:
             if d['vi'] == 'Manufacturing': 
                 comp.mfg_effects.append((self.current_round + 1, self.current_round + 2, 50, 100))
             if d['build_factory']: 
-                comp.factory_effects.append(self.current_round + 2)
+                comp.factory_effects.append(self.current_round + 1)
 
             net_profit = op_profit - inv_cost
             comp.cash += net_profit
