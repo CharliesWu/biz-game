@@ -10,7 +10,7 @@ class Company:
         self.cash = 7000000 
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
-        self.last_round_profit = 0 # 统一变量名，修复报错
+        self.last_round_profit = 0 
         self.extra_pe = 0
         self.mfg_effects = []   
         self.soft_effects = []  
@@ -120,12 +120,11 @@ class SimulationEngine:
 
             net_profit = op_profit - inv_cost
             
-            # 检查连续亏损
             if comp.last_round_profit < 0 and net_profit < 0: 
                 comp.ever_had_consecutive_loss = True
             
             comp.cash += net_profit
-            comp.last_round_profit = net_profit # 统一更新
+            comp.last_round_profit = net_profit
 
             market_cap = max(0.0, op_profit * comp.get_display_pe())
             if comp.cash < 0: comp.is_bankrupt = True
@@ -153,11 +152,9 @@ class SimulationEngine:
         for name in self.teams:
             c = self.companies[name]
             pe = max(5, 10 + c.extra_pe - (2 if c.ever_had_consecutive_loss else 0))
-            # 修复：使用正确的变量名 last_round_profit
             price = 0 if c.is_bankrupt else c.last_round_profit * pe
-            final_list.append({'Team': name, 'Final_Share': c.prev_low_share * 0.8 + c.prev_high_share * 0.2, 'Price': price})
+            final_list.append({'Team': name, 'Final_Share': 0.0, 'Price': price})
         
-        # 实际从历史数据抓取更准确的最终份额
         for i, entry in enumerate(final_list):
             name = entry['Team']
             if not self.companies[name].is_bankrupt:
@@ -228,7 +225,8 @@ if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Official Results")
-    st.table(style_results(latest))
+    # 修改点：将 st.table 替换为 st.dataframe 并隐藏序号
+    st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
 # Form for Team Input
 if role.startswith("Team") and not game.game_over:
@@ -258,4 +256,5 @@ if game.game_over:
     st.divider()
     st.header("🏆 Final Standings")
     final_scores = game.get_final_scores()
-    st.table(final_scores.style.format({"Final_Share": "{:.2%}", "Price": "${:,.0f}", "Score": "{:.4f}"}))
+    # 修改点：最终排名也改为 st.dataframe 并隐藏序号
+    st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Price": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
