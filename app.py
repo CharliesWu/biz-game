@@ -139,7 +139,7 @@ class SimulationEngine:
 
         df = pd.DataFrame(round_results)
         df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
-        df['Price Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
+        df['Mkt Cap Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
         
         self.history.append(df)
         self.submitted_teams, self.round_decisions = set(), {}
