@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+import streamlit.components.v1 as components
 
 # ==========================================
-# 1. CORE BUSINESS LOGIC
+# 1. 核心业务逻辑
 # ==========================================
 class Company:
     def __init__(self, name):
@@ -66,6 +67,7 @@ class SimulationEngine:
         active_count = sum(1 for c in self.companies.values() if not c.is_bankrupt)
         default_share = 1.0 / active_count if active_count > 0 else 0.25
 
+        # 记录决策用于审计
         for name, d in self.round_decisions.items():
             self.decision_history.append({
                 'Round': self.current_round, 'Team': name,
@@ -151,7 +153,6 @@ class SimulationEngine:
         for name in self.teams:
             c = self.companies[name]
             pe = max(5, 10 + c.extra_pe - (2 if c.ever_had_consecutive_loss else 0))
-            # 关键修复：最终计算也使用 'Market Cap' 键名
             mc = 0 if c.is_bankrupt else c.last_round_profit * pe
             final_list.append({'Team': name, 'Final_Share': 0.0, 'Market Cap': mc})
         
@@ -166,8 +167,35 @@ class SimulationEngine:
         return df.sort_values('Score', ascending=False)
 
 # ==========================================
-# 2. UI LOGIC & STYLING
+# 2. UI 逻辑与视觉特效
 # ==========================================
+
+# 烟花特效代码 (JavaScript)
+fireworks_js = """
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+<script>
+    var duration = 5 * 1000;
+    var animationEnd = Date.now() + duration;
+    var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+    function randomInRange(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
+    var interval = setInterval(function() {
+      var timeLeft = animationEnd - Date.now();
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
+      var particleCount = 50 * (timeLeft / duration);
+      confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
+      confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
+    }, 250);
+</script>
+"""
+
 @st.cache_resource
 def get_shared_game(): return SimulationEngine()
 game = get_shared_game()
@@ -177,10 +205,10 @@ st.title("🚗 Automotive Strategic Simulation Dashboard")
 
 def style_results(df):
     def color_ranks(val):
-        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
-        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' 
-        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' 
-        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' 
+        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # 金
+        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # 银
+        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # 铜
+        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # 浅蓝
         return 'font-weight: bold'
 
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
@@ -194,7 +222,7 @@ def style_results(df):
     }).map(color_ranks, subset=['Share Rank', 'Mkt Cap Rank'])\
       .set_properties(subset=['Total Share', 'PE'], **{'font-weight': 'bold'})
 
-# Sidebar
+# 侧边栏
 st.sidebar.title("Sim Control")
 role = st.sidebar.selectbox("Select Role", ["--- Select ---", "Teacher/Observer", "Team 1", "Team 2", "Team 3", "Team 4"])
 
@@ -204,6 +232,7 @@ if role == "Teacher/Observer":
     confirm_reset = st.sidebar.checkbox("Double check to enable reset")
     if st.sidebar.button("RESET ALL GAME DATA", disabled=not confirm_reset):
         st.cache_resource.clear()
+        if 'celebrated' in st.session_state: del st.session_state['celebrated']
         st.rerun()
 
 if st.sidebar.button("🔄 Sync Screen"): st.rerun()
@@ -212,7 +241,7 @@ if role == "--- Select ---":
     st.info("Please select your role in the sidebar.")
     st.stop()
 
-# Progress Status
+# 进度状态
 st.subheader(f"Round {game.current_round} Progress")
 s_cols = st.columns(4)
 for i, t in enumerate(game.teams):
@@ -220,14 +249,27 @@ for i, t in enumerate(game.teams):
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     s_cols[i].metric(t, status)
 
-# Dashboard
+# 趋势图展示 (如果有历史数据)
+if game.history:
+    st.divider()
+    c1, c2 = st.columns(2)
+    low_chart_data = pd.DataFrame({t: [0.25] + [round_df[round_df['Team'] == t]['Low Share'].values[0] for round_df in game.history] for t in game.teams})
+    high_chart_data = pd.DataFrame({t: [0.25] + [round_df[round_df['Team'] == t]['High Share'].values[0] for round_df in game.history] for t in game.teams})
+    with c1:
+        st.write("### 📉 Low-End Market Share Trend")
+        st.line_chart(low_chart_data)
+    with c2:
+        st.write("### 📈 High-End Market Share Trend")
+        st.line_chart(high_chart_data)
+
+# 结果看板
 if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Official Results")
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
-# Form for Team Input
+# 团队决策输入
 if role.startswith("Team") and not game.game_over:
     if role in game.submitted_teams:
         st.success(f"Strategy for {role} locked.")
@@ -243,17 +285,30 @@ if role.startswith("Team") and not game.game_over:
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
 
-# Processing Logic
+# 老师执行计算
 if len(game.submitted_teams) == 4 and not game.game_over and role == "Teacher/Observer":
     if st.button("🚀 PROCESS MARKET ROUND"):
         game.run_market_logic()
         st.balloons()
         st.rerun()
 
-# Final Scoring
+# 最终回顾页面 (只有游戏结束才显示)
 if game.game_over:
+    # 庆祝效果：烟花 + 气球
+    if 'celebrated' not in st.session_state:
+        st.balloons()
+        components.html(fireworks_js, height=0)
+        st.session_state['celebrated'] = True
+
     st.divider()
-    st.header("🏆 Final Standings")
+    st.header("🏆 Final Review & Championship Standing")
+    
+    # 最终排名
     final_scores = game.get_final_scores()
-    # 修复点：显示时也将 Price 改为 Market Cap
+    st.write("### 🥇 Final Standings")
     st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
+    
+    # 决策审计表
+    st.write("### 📝 Strategic Audit (Full Decision History)")
+    audit_df = pd.DataFrame(game.decision_history)
+    st.dataframe(audit_df.sort_values(['Team', 'Round']), hide_index=True, use_container_width=True)
