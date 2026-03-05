@@ -7,17 +7,15 @@ import pandas as pd
 class Company:
     def __init__(self, name):
         self.name = name
-        # UPDATED: Starting cash set to 7,000,000
         self.cash = 7000000 
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
-        self.last_round_net_profit = 0
+        self.last_round_profit = 0 # 统一变量名，修复报错
         self.extra_pe = 0
         self.mfg_effects = []   
         self.soft_effects = []  
         self.factory_effects = [] 
         
-        # Initial baseline at 25% for Round 0 inertia
         self.prev_low_share = 0.25
         self.prev_high_share = 0.25
 
@@ -121,9 +119,13 @@ class SimulationEngine:
                 comp.factory_effects.append(self.current_round + 1)
 
             net_profit = op_profit - inv_cost
+            
+            # 检查连续亏损
+            if comp.last_round_profit < 0 and net_profit < 0: 
+                comp.ever_had_consecutive_loss = True
+            
             comp.cash += net_profit
-            if comp.last_round_net_profit < 0 and net_profit < 0: comp.ever_had_consecutive_loss = True
-            comp.last_round_net_profit = net_profit
+            comp.last_round_profit = net_profit # 统一更新
 
             market_cap = max(0.0, op_profit * comp.get_display_pe())
             if comp.cash < 0: comp.is_bankrupt = True
@@ -137,7 +139,6 @@ class SimulationEngine:
             })
 
         df = pd.DataFrame(round_results)
-        # FIX: Ensure column names match UI expectations
         df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
         df['Mkt Cap Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
         
@@ -152,9 +153,16 @@ class SimulationEngine:
         for name in self.teams:
             c = self.companies[name]
             pe = max(5, 10 + c.extra_pe - (2 if c.ever_had_consecutive_loss else 0))
+            # 修复：使用正确的变量名 last_round_profit
             price = 0 if c.is_bankrupt else c.last_round_profit * pe
-            final_list.append({'Team': name, 'Final_Share': c.last_total_share, 'Price': price})
+            final_list.append({'Team': name, 'Final_Share': c.prev_low_share * 0.8 + c.prev_high_share * 0.2, 'Price': price})
         
+        # 实际从历史数据抓取更准确的最终份额
+        for i, entry in enumerate(final_list):
+            name = entry['Team']
+            if not self.companies[name].is_bankrupt:
+                entry['Final_Share'] = self.history[-1][self.history[-1]['Team'] == name]['Total Share'].values[0]
+
         df = pd.DataFrame(final_list)
         ms, mp = df['Final_Share'].max(), df['Price'].max()
         df['Score'] = 0.5*(df['Final_Share']/(ms if ms>0 else 1)) + 0.5*(df['Price']/(mp if mp>0 else 1))
@@ -170,16 +178,14 @@ game = get_shared_game()
 st.set_page_config(page_title="Strategic Simulation", layout="wide")
 st.title("🚗 Automotive Strategic Simulation Dashboard")
 
-# Styled Rank Columns and Bolding
 def style_results(df):
     def color_ranks(val):
         if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # Gold
         if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # Silver
         if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # Bronze
-        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' 
+        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # Ice Blue for 4th
         return 'font-weight: bold'
 
-    # Display columns in a logical order
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
             'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
             'Building This Round', 'Market Cap', 'Mkt Cap Rank']
