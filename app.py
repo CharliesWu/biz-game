@@ -7,7 +7,7 @@ import pandas as pd
 class Company:
     def __init__(self, name):
         self.name = name
-        # UPDATED: Starting cash set to 7,000,000 as requested
+        # UPDATED: Starting cash set to 7,000,000
         self.cash = 7000000 
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
@@ -125,7 +125,6 @@ class SimulationEngine:
             if comp.last_round_net_profit < 0 and net_profit < 0: comp.ever_had_consecutive_loss = True
             comp.last_round_net_profit = net_profit
 
-            # Renamed to Market Cap as requested
             market_cap = max(0.0, op_profit * comp.get_display_pe())
             if comp.cash < 0: comp.is_bankrupt = True
             
@@ -138,14 +137,28 @@ class SimulationEngine:
             })
 
         df = pd.DataFrame(round_results)
+        # FIX: Ensure column names match UI expectations
         df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
-        df[''] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
+        df['Mkt Cap Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
         
         self.history.append(df)
         self.submitted_teams, self.round_decisions = set(), {}
         if self.current_round >= 4: self.game_over = True
         else: self.current_round += 1
         return True
+
+    def get_final_scores(self):
+        final_list = []
+        for name in self.teams:
+            c = self.companies[name]
+            pe = max(5, 10 + c.extra_pe - (2 if c.ever_had_consecutive_loss else 0))
+            price = 0 if c.is_bankrupt else c.last_round_profit * pe
+            final_list.append({'Team': name, 'Final_Share': c.last_total_share, 'Price': price})
+        
+        df = pd.DataFrame(final_list)
+        ms, mp = df['Final_Share'].max(), df['Price'].max()
+        df['Score'] = 0.5*(df['Final_Share']/(ms if ms>0 else 1)) + 0.5*(df['Price']/(mp if mp>0 else 1))
+        return df.sort_values('Score', ascending=False)
 
 # ==========================================
 # 2. UI LOGIC & STYLING
@@ -165,18 +178,22 @@ def style_results(df):
         if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # Bronze
         return 'font-weight: bold'
 
-    return df.style.format({
+    # Display columns in a logical order
+    cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
+            'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
+            'Building This Round', 'Market Cap', 'Mkt Cap Rank']
+
+    return df[cols].style.format({
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
         "Op Profit": "${:,.0f}", "Net Profit": "${:,.0f}", "Cash Balance": "${:,.0f}", 
         "PE": "{:.1f}", "Market Cap": "${:,.0f}"
-    }).applymap(color_ranks, subset=['Share Rank', 'Mkt Cap Rank'])\
+    }).map(color_ranks, subset=['Share Rank', 'Mkt Cap Rank'])\
       .set_properties(subset=['Total Share', 'PE'], **{'font-weight': 'bold'})
 
 # Sidebar
 st.sidebar.title("Sim Control")
 role = st.sidebar.selectbox("Select Role", ["--- Select ---", "Teacher/Observer", "Team 1", "Team 2", "Team 3", "Team 4"])
 
-# Logic for Reset Button at the bottom of sidebar
 st.sidebar.markdown("---")
 if role == "Teacher/Observer":
     st.sidebar.subheader("🚨 Danger Zone")
@@ -199,12 +216,11 @@ for i, t in enumerate(game.teams):
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     s_cols[i].metric(t, status)
 
-# Charts & Dashboard
+# Dashboard
 if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Official Results")
-    # Display the styled table
     st.table(style_results(latest))
 
 # Form for Team Input
