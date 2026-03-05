@@ -119,7 +119,6 @@ class SimulationEngine:
                 comp.factory_effects.append(self.current_round + 1)
 
             net_profit = op_profit - inv_cost
-            
             if comp.last_round_profit < 0 and net_profit < 0: 
                 comp.ever_had_consecutive_loss = True
             
@@ -152,8 +151,9 @@ class SimulationEngine:
         for name in self.teams:
             c = self.companies[name]
             pe = max(5, 10 + c.extra_pe - (2 if c.ever_had_consecutive_loss else 0))
-            price = 0 if c.is_bankrupt else c.last_round_profit * pe
-            final_list.append({'Team': name, 'Final_Share': 0.0, 'Price': price})
+            # 关键修复：最终计算也使用 'Market Cap' 键名
+            mc = 0 if c.is_bankrupt else c.last_round_profit * pe
+            final_list.append({'Team': name, 'Final_Share': 0.0, 'Market Cap': mc})
         
         for i, entry in enumerate(final_list):
             name = entry['Team']
@@ -161,8 +161,8 @@ class SimulationEngine:
                 entry['Final_Share'] = self.history[-1][self.history[-1]['Team'] == name]['Total Share'].values[0]
 
         df = pd.DataFrame(final_list)
-        ms, mp = df['Final_Share'].max(), df['Price'].max()
-        df['Score'] = 0.5*(df['Final_Share']/(ms if ms>0 else 1)) + 0.5*(df['Price']/(mp if mp>0 else 1))
+        ms, mmc = df['Final_Share'].max(), df['Market Cap'].max()
+        df['Score'] = 0.5*(df['Final_Share']/(ms if ms>0 else 1)) + 0.5*(df['Market Cap']/(mmc if mmc>0 else 1))
         return df.sort_values('Score', ascending=False)
 
 # ==========================================
@@ -177,10 +177,10 @@ st.title("🚗 Automotive Strategic Simulation Dashboard")
 
 def style_results(df):
     def color_ranks(val):
-        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # Gold
-        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # Silver
-        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # Bronze
-        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # Ice Blue for 4th
+        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
+        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' 
+        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' 
+        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' 
         return 'font-weight: bold'
 
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
@@ -225,7 +225,6 @@ if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Official Results")
-    # 修改点：将 st.table 替换为 st.dataframe 并隐藏序号
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
 # Form for Team Input
@@ -256,5 +255,5 @@ if game.game_over:
     st.divider()
     st.header("🏆 Final Standings")
     final_scores = game.get_final_scores()
-    # 修改点：最终排名也改为 st.dataframe 并隐藏序号
+    # 修复点：显示时也将 Price 改为 Market Cap
     st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
