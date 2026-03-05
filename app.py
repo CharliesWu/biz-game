@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 class Company:
     def __init__(self, name):
         self.name = name
-        self.cash = 7000000 # 起始资金 7,000,000
+        self.cash = 7000000 
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
         self.last_round_profit = 0 
@@ -17,7 +17,6 @@ class Company:
         self.soft_effects = []  
         self.factory_effects = [] 
         
-        # 初始份额 25% (Round 0)
         self.prev_low_share = 0.25
         self.prev_high_share = 0.25
 
@@ -54,7 +53,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 # 份额保留系数
+        self.alpha = 0.6 
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -68,15 +67,12 @@ class SimulationEngine:
         active_count = sum(1 for c in self.companies.values() if not c.is_bankrupt)
         default_share = 1.0 / active_count if active_count > 0 else 0.25
 
-        # 记录审计决策
+        # 记录决策用于审计
         for name, d in self.round_decisions.items():
             self.decision_history.append({
-                'Round': self.current_round, 
-                'Team': name,
-                'Low %': f"{d['low_ratio']:.0%}", 
-                'High %': f"{d['high_ratio']:.0%}",
-                'Vertical Integration': d['vi'], 
-                '本轮是否建工厂': "Yes" if d['build_factory'] else "No"
+                'Round': self.current_round, 'Team': name,
+                'Low %': f"{d['low_ratio']:.0%}", 'High %': f"{d['high_ratio']:.0%}",
+                'VI': d['vi'], 'Building This Round': "Yes" if d['build_factory'] else "No"
             })
         
         w_low, w_high = {}, {}
@@ -98,7 +94,7 @@ class SimulationEngine:
                 round_results.append({
                     'Team': name, 'Op Profit': 0.0, 'Net Profit': 0.0, 'Cash Balance': comp.cash, 
                     'Total Share': 0.0, 'Low Share': 0.0, 'High Share': 0.0, 
-                    'PE': 0.0, '本轮是否建工厂': 'Bankrupt', 'Market Cap': 0.0
+                    'PE': 0.0, 'Building This Round': 'Bankrupt', 'Market Cap': 0.0
                 })
                 continue
 
@@ -138,7 +134,7 @@ class SimulationEngine:
                 'Team': name, 'Op Profit': op_profit, 'Net Profit': net_profit, 
                 'Cash Balance': comp.cash, 'Total Share': (act_l * low_market + act_h * high_market) / 100000, 
                 'Low Share': act_l, 'High Share': act_h, 
-                'PE': comp.get_display_pe(), '本轮是否建工厂': "Yes" if d['build_factory'] else "No", 
+                'PE': comp.get_display_pe(), 'Building This Round': "Yes" if d['build_factory'] else "No", 
                 'Market Cap': market_cap
             })
 
@@ -174,16 +170,25 @@ class SimulationEngine:
 # 2. UI 逻辑与视觉特效
 # ==========================================
 
+# 烟花特效代码 (JavaScript)
 fireworks_js = """
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <script>
     var duration = 5 * 1000;
     var animationEnd = Date.now() + duration;
     var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
-    function randomInRange(min, max) { return Math.random() * (max - min) + min; }
+
+    function randomInRange(min, max) {
+      return Math.random() * (max - min) + min;
+    }
+
     var interval = setInterval(function() {
       var timeLeft = animationEnd - Date.now();
-      if (timeLeft <= 0) { return clearInterval(interval); }
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+
       var particleCount = 50 * (timeLeft / duration);
       confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
       confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
@@ -195,7 +200,7 @@ fireworks_js = """
 def get_shared_game(): return SimulationEngine()
 game = get_shared_game()
 
-st.set_page_config(page_title="Strategic Management Simulation", layout="wide")
+st.set_page_config(page_title="Strategic Simulation", layout="wide")
 st.title("🚗 Automotive Strategic Simulation Dashboard")
 
 def style_results(df):
@@ -206,10 +211,9 @@ def style_results(df):
         if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # 浅蓝
         return 'font-weight: bold'
 
-    # 定义显示的列
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
             'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
-            '本轮是否建工厂', 'Market Cap', 'Mkt Cap Rank']
+            'Building This Round', 'Market Cap', 'Mkt Cap Rank']
 
     return df[cols].style.format({
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
@@ -225,7 +229,7 @@ role = st.sidebar.selectbox("Select Role", ["--- Select ---", "Teacher/Observer"
 st.sidebar.markdown("---")
 if role == "Teacher/Observer":
     st.sidebar.subheader("🚨 Danger Zone")
-    confirm_reset = st.sidebar.checkbox("Confirm to enable reset")
+    confirm_reset = st.sidebar.checkbox("Double check to enable reset")
     if st.sidebar.button("RESET ALL GAME DATA", disabled=not confirm_reset):
         st.cache_resource.clear()
         if 'celebrated' in st.session_state: del st.session_state['celebrated']
@@ -234,23 +238,23 @@ if role == "Teacher/Observer":
 if st.sidebar.button("🔄 Sync Screen"): st.rerun()
 
 if role == "--- Select ---":
-    st.info("Select your role in the sidebar.")
+    st.info("Please select your role in the sidebar.")
     st.stop()
 
 # 进度状态
-st.subheader(f"Round {game.current_round} / 4")
+st.subheader(f"Round {game.current_round} Progress")
 s_cols = st.columns(4)
 for i, t in enumerate(game.teams):
     status = "✅ Ready" if t in game.submitted_teams else "⏳ Thinking"
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     s_cols[i].metric(t, status)
 
-# 趋势图展示
+# 趋势图展示 (如果有历史数据)
 if game.history:
     st.divider()
     c1, c2 = st.columns(2)
-    low_chart_data = pd.DataFrame({t: [0.25] + [df[df['Team'] == t]['Low Share'].values[0] for df in game.history] for t in game.teams})
-    high_chart_data = pd.DataFrame({t: [0.25] + [df[df['Team'] == t]['High Share'].values[0] for df in game.history] for t in game.teams})
+    low_chart_data = pd.DataFrame({t: [0.25] + [round_df[round_df['Team'] == t]['Low Share'].values[0] for round_df in game.history] for t in game.teams})
+    high_chart_data = pd.DataFrame({t: [0.25] + [round_df[round_df['Team'] == t]['High Share'].values[0] for round_df in game.history] for t in game.teams})
     with c1:
         st.write("### 📉 Low-End Market Share Trend")
         st.line_chart(low_chart_data)
@@ -265,7 +269,7 @@ if game.history:
     st.write(f"## 📊 Round {len(game.history)} Official Results")
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
-# 决策输入 (Teams)
+# 团队决策输入
 if role.startswith("Team") and not game.game_over:
     if role in game.submitted_teams:
         st.success(f"Strategy for {role} locked.")
@@ -288,15 +292,16 @@ if len(game.submitted_teams) == 4 and not game.game_over and role == "Teacher/Ob
         st.balloons()
         st.rerun()
 
-# 最终回顾
+# 最终回顾页面 (只有游戏结束才显示)
 if game.game_over:
+    # 庆祝效果：烟花 + 气球
     if 'celebrated' not in st.session_state:
         st.balloons()
         components.html(fireworks_js, height=0)
         st.session_state['celebrated'] = True
 
     st.divider()
-    st.header("🏆 Final Review & Standing")
+    st.header("🏆 Final Review & Championship Standing")
     
     # 最终排名
     final_scores = game.get_final_scores()
@@ -304,6 +309,6 @@ if game.game_over:
     st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
     
     # 决策审计表
-    st.write("### 📝 Strategic Audit")
+    st.write("### 📝 Strategic Audit (Full Decision History)")
     audit_df = pd.DataFrame(game.decision_history)
     st.dataframe(audit_df.sort_values(['Team', 'Round']), hide_index=True, use_container_width=True)
