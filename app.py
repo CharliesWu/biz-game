@@ -257,4 +257,4 @@ if game.game_over:
     st.header("🏆 Final Standings")
     final_scores = game.get_final_scores()
     # 修改点：最终排名也改为 st.dataframe 并隐藏序号
-    st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Price": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
+    st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
