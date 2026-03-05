@@ -176,6 +176,7 @@ def style_results(df):
         if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # Gold
         if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # Silver
         if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # Bronze
+        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' 
         return 'font-weight: bold'
 
     # Display columns in a logical order
