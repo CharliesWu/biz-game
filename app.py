@@ -139,7 +139,7 @@ class SimulationEngine:
 
         df = pd.DataFrame(round_results)
         df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
-        df['Mkt Cap Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
+        df[''] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
         
         self.history.append(df)
         self.submitted_teams, self.round_decisions = set(), {}
@@ -169,7 +169,7 @@ def style_results(df):
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
         "Op Profit": "${:,.0f}", "Net Profit": "${:,.0f}", "Cash Balance": "${:,.0f}", 
         "PE": "{:.1f}", "Market Cap": "${:,.0f}"
-    }).applymap(color_ranks, subset=['Share Rank', 'Price Rank'])\
+    }).applymap(color_ranks, subset=['Share Rank', 'Mkt Cap Rank'])\
       .set_properties(subset=['Total Share', 'PE'], **{'font-weight': 'bold'})
 
 # Sidebar
