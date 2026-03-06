@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 class Company:
     def __init__(self, name):
         self.name = name
-        self.cash = 7000000 # 起始资金 7M
+        self.cash = 7000000 # Starting cash 7M (起始资金 7,000,000)
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
         self.last_round_profit = 0 
@@ -17,7 +17,7 @@ class Company:
         self.soft_effects = []  
         self.factory_effects = [] 
         
-        # 初始市场份额基准 (Round 0)
+        # Initial baseline market shares (Round 0)
         self.prev_low_share = 0.25
         self.prev_high_share = 0.25
 
@@ -54,7 +54,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 # 惯性系数
+        self.alpha = 0.6 # Market inertia coefficient (惯性系数)
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -68,7 +68,7 @@ class SimulationEngine:
         active_count = sum(1 for c in self.companies.values() if not c.is_bankrupt)
         default_share = 1.0 / active_count if active_count > 0 else 0.25
 
-        # 审计决策记录
+        # Log decisions for Audit Trail
         for name, d in self.round_decisions.items():
             self.decision_history.append({
                 'Round': self.current_round, 
@@ -113,7 +113,7 @@ class SimulationEngine:
             
             d = self.round_decisions[name]
             
-            # 成本判定
+            # Match selection strings to logic
             cost_mfg = 3000000 if "Manufacturing" in d['vi'] else 0
             cost_soft = 1500000 if "Software" in d['vi'] else 0
             cost_factory = 5000000 if d['build_factory'] else 0
@@ -151,7 +151,7 @@ class SimulationEngine:
         
         self.history.append(df)
         self.submitted_teams, self.round_decisions = set(), {}
-        if self.current_round >= 4: self.game_over = True
+        if self.current_round >= 4: self.game_over = True # Total 4 rounds
         else: self.current_round += 1
         return True
 
@@ -220,7 +220,7 @@ def style_results(df):
     }).map(color_ranks, subset=['Share Rank', 'Mkt Cap Rank'])\
       .set_properties(subset=['Total Share', 'PE'], **{'font-weight': 'bold'})
 
-# 侧边栏
+# Sidebar Controls
 st.sidebar.title("Sim Control")
 role = st.sidebar.selectbox("Select Role", ["--- Select ---", "Teacher/Observer", "Team 1", "Team 2", "Team 3", "Team 4"])
 
@@ -239,7 +239,7 @@ if role == "--- Select ---":
     st.info("Please select your role in the sidebar.")
     st.stop()
 
-# 状态指标
+# Progress Metrics
 st.subheader(f"Round {game.current_round} / 4")
 s_cols = st.columns(4)
 for i, t in enumerate(game.teams):
@@ -247,7 +247,7 @@ for i, t in enumerate(game.teams):
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     s_cols[i].metric(t, status)
 
-# 历史图表
+# Trend Charts
 if game.history:
     st.divider()
     c1, c2 = st.columns(2)
@@ -260,14 +260,14 @@ if game.history:
         st.write("### 📈 High-End Market Share Trend")
         st.line_chart(high_chart_data)
 
-# 结果表格
+# Dashboard Results
 if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Results")
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
-# 决策表单
+# Team Decision Input
 if role.startswith("Team") and not game.game_over:
     if role in game.submitted_teams:
         st.success(f"Strategy for {role} locked.")
@@ -290,24 +290,21 @@ if role.startswith("Team") and not game.game_over:
                 ["None", "Manufacturing ($3,000,000)", "Software ($1,500,000)"]
             )
             
-            # Decision 3: Checkbox at the end of the sentence
-            st.write("---")
-            col_text, col_box = st.columns([6, 1])
-            col_text.write("Decision 3: Construction of New Factory? ($5,000,000)")
-            build_f = col_box.checkbox("", key=f"fac_{role}")
+            # Decision 3: Standard Checkbox Position (Box on Left)
+            build_f = st.checkbox("Decision 3: Construction of New Factory? ($5,000,000)")
             
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
 
-# 老师执行
+# Processing Button (Teacher Only)
 if len(game.submitted_teams) == 4 and not game.game_over and role == "Teacher/Observer":
     if st.button("🚀 PROCESS MARKET ROUND"):
         game.run_market_logic()
         st.balloons()
         st.rerun()
 
-# 终局汇总
+# End-Game Summary & Celebration
 if game.game_over:
     if 'celebrated' not in st.session_state:
         st.balloons()
