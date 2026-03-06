@@ -17,7 +17,7 @@ class Company:
         self.soft_effects = []  
         self.factory_effects = [] 
         
-        # 8人初始基准 (1/8 = 0.125)
+        # 8-team baseline (1/8 = 0.125)
         self.prev_low_share = 0.125
         self.prev_high_share = 0.125
 
@@ -54,7 +54,8 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 
+        # UPDATED: alpha=0.4 (40% inertia from past, 60% weight on new decision)
+        self.alpha = 0.4 
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -64,7 +65,7 @@ class SimulationEngine:
         active_teams = [t for t in self.teams if not self.companies[t].is_bankrupt]
         if len(self.submitted_teams) < len(active_teams): return False
         
-        # 200,000 辆车规模
+        # Market Scale: 200,000 units
         low_market, high_market = 160000, 40000
         round_results = []
         default_share = 1.0 / len(active_teams) if active_teams else 0.125
@@ -109,6 +110,8 @@ class SimulationEngine:
 
             new_l = w_low[name]/s_low_total if s_low_total > 0 else default_share
             new_h = w_high[name]/s_high_total if s_high_total > 0 else default_share
+            
+            # Calculating responsive Market Share
             act_l = (self.alpha * comp.prev_low_share) + ((1 - self.alpha) * new_l)
             act_h = (self.alpha * comp.prev_high_share) + ((1 - self.alpha) * new_h)
             comp.prev_low_share, comp.prev_high_share = act_l, act_h
@@ -147,7 +150,6 @@ class SimulationEngine:
             })
 
         df = pd.DataFrame(round_results)
-        # 更新 Rank 计算所使用的列名
         df['Mkt % Rank'] = df['Total Mkt %'].rank(ascending=False, method='min').astype(int)
         df['Mkt Cap Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
         
@@ -176,9 +178,8 @@ class SimulationEngine:
         return df.sort_values('Score', ascending=False)
 
 # ==========================================
-# 2. UI LOGIC & VISUALS (界面与视觉)
+# 2. UI LOGIC & VISUALS
 # ==========================================
-
 fireworks_js = """
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <script>
@@ -205,7 +206,6 @@ st.title("🚗 Automotive Strategic Simulation Dashboard")
 
 def style_results(df):
     def color_ranks(val):
-        # 1-3金银铜，4-6绿色，7-8红色
         if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
         if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' 
         if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' 
@@ -213,7 +213,6 @@ def style_results(df):
         if val >= 7: return 'background-color: #FFCDD2; color: #B71C1C; font-weight: bold'
         return 'font-weight: bold'
 
-    # 更新显示的列名
     cols = ['Team', 'Low Mkt %', 'High Mkt %', 'Total Mkt %', 'Mkt % Rank', 
             'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
             'Factory Construction', 'Market Cap', 'Mkt Cap Rank']
@@ -245,7 +244,7 @@ if role == "--- Select ---":
     st.info("Please select your role in the sidebar.")
     st.stop()
 
-# 进度状态 (2行4列)
+# Status Dashboard (2-row grid)
 st.subheader(f"Round {game.current_round} / 4 Progress")
 row1 = st.columns(4)
 row2 = st.columns(4)
@@ -255,14 +254,14 @@ for i, t in enumerate(game.teams):
     if i < 4: row1[i].metric(t, status)
     else: row2[i-4].metric(t, status)
 
-# 官方结果展示
+# Official Results (Tables only)
 if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Official Results")
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
-# 决策输入
+# Team Decision Input
 if role.startswith("Team") and not game.game_over:
     if role in game.submitted_teams:
         st.success(f"Strategy for {role} locked.")
@@ -279,14 +278,14 @@ if role.startswith("Team") and not game.game_over:
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
 
-# 教师处理逻辑
+# Teacher Execute
 if len(game.submitted_teams) >= len([t for t in game.teams if not game.companies[t].is_bankrupt]) and not game.game_over and role == "Teacher/Observer" and len(game.submitted_teams) > 0:
     if st.button("🚀 PROCESS MARKET ROUND"):
         game.run_market_logic()
         st.balloons()
         st.rerun()
 
-# 终局排行榜
+# Final Recap
 if game.game_over:
     if 'celebrated' not in st.session_state:
         st.balloons()
