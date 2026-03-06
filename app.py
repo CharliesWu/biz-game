@@ -3,12 +3,12 @@ import pandas as pd
 import streamlit.components.v1 as components
 
 # ==========================================
-# 1. CORE BUSINESS LOGIC (核心业务逻辑)
+# 1. CORE BUSINESS LOGIC
 # ==========================================
 class Company:
     def __init__(self, name):
         self.name = name
-        self.cash = 7000000 # Starting Cash: $7,000,000
+        self.cash = 7000000 # Starting Cash: $7M
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
         self.last_round_profit = 0 
@@ -46,7 +46,7 @@ class Company:
 
 class SimulationEngine:
     def __init__(self):
-        # 增加到 8 个组
+        # Increased to 8 Teams
         self.teams = [f"Team {i}" for i in range(1, 9)]
         self.companies = {name: Company(name) for name in self.teams}
         self.current_round = 1
@@ -55,7 +55,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 # Retention coefficient
+        self.alpha = 0.6 
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -65,7 +65,7 @@ class SimulationEngine:
         active_teams = [t for t in self.teams if not self.companies[t].is_bankrupt]
         if len(self.submitted_teams) < len(active_teams): return False
         
-        # 总规模变为 200,000 辆车 (Low: 160k, High: 40k)
+        # Market Scaled to 200,000 (Low: 160k, High: 40k)
         low_market, high_market = 160000, 40000
         round_results = []
         default_share = 1.0 / len(active_teams) if active_teams else 0.125
@@ -176,7 +176,7 @@ class SimulationEngine:
         return df.sort_values('Score', ascending=False)
 
 # ==========================================
-# 2. UI LOGIC & VISUALS (界面与视觉)
+# 2. UI LOGIC & VISUALS
 # ==========================================
 
 fireworks_js = """
@@ -205,10 +205,12 @@ st.title("🚗 Automotive Strategic Simulation Dashboard")
 
 def style_results(df):
     def color_ranks(val):
+        # 8-Team Ranked Tier Colors
         if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # Gold
         if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # Silver
         if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # Bronze
-        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # Ice Blue
+        if 4 <= val <= 6: return 'background-color: #C8E6C9; color: #1B5E20; font-weight: bold' # Green Zone
+        if val >= 7: return 'background-color: #FFCDD2; color: #B71C1C; font-weight: bold' # Red Zone
         return 'font-weight: bold'
 
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
@@ -219,7 +221,7 @@ def style_results(df):
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
         "Op Profit": "${:,.0f}", "Net Profit": "${:,.0f}", "Cash Balance": "${:,.0f}", 
         "PE": "{:.1f}", "Market Cap": "${:,.0f}"
-    }).map(color_ranks, subset=['Share Rank', 'Mkt Cap Rank'])\
+    }).map(color_ranks, subset=['Mkt Cap Rank', 'Share Rank'])\
       .set_properties(subset=['Total Share', 'PE'], **{'font-weight': 'bold'})
 
 # Sidebar
@@ -242,7 +244,7 @@ if role == "--- Select ---":
     st.info("Please select your role in the sidebar.")
     st.stop()
 
-# Progress Dashboard - 修改为两行，每行4个
+# Progress Dashboard (2-row grid)
 st.subheader(f"Round {game.current_round} / 4 Progress")
 row1 = st.columns(4)
 row2 = st.columns(4)
@@ -251,29 +253,10 @@ for i, t in enumerate(game.teams):
     status = "✅ Ready" if t in game.submitted_teams else "⏳ Thinking"
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     
-    # 分行逻辑：前4个在row1，后4个在row2
     if i < 4:
         row1[i].metric(t, status)
     else:
         row2[i-4].metric(t, status)
-
-# Trend Charts
-if game.history:
-    st.divider()
-    c1, c2 = st.columns(2)
-    low_data_dict = {t: [0.125] for t in game.teams}
-    high_data_dict = {t: [0.125] for t in game.teams}
-    for round_df in game.history:
-        for t in game.teams:
-            team_row = round_df[round_df['Team'] == t]
-            low_data_dict[t].append(team_row['Low Share'].values[0] if not team_row.empty else 0.0)
-            high_data_dict[t].append(team_row['High Share'].values[0] if not team_row.empty else 0.0)
-    with c1:
-        st.write("### 📉 Low-End Market Share Trend")
-        st.line_chart(pd.DataFrame(low_data_dict))
-    with c2:
-        st.write("### 📈 High-End Market Share Trend")
-        st.line_chart(pd.DataFrame(high_data_dict))
 
 # Official Results
 if game.history:
