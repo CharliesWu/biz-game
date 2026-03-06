@@ -3,7 +3,7 @@ import pandas as pd
 import streamlit.components.v1 as components
 
 # ==========================================
-# 1. 核心业务逻辑
+# 1. CORE BUSINESS LOGIC (核心业务逻辑)
 # ==========================================
 class Company:
     def __init__(self, name):
@@ -17,6 +17,7 @@ class Company:
         self.soft_effects = []  
         self.factory_effects = [] 
         
+        # 初始市场份额基准 (Round 0)
         self.prev_low_share = 0.25
         self.prev_high_share = 0.25
 
@@ -53,7 +54,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 
+        self.alpha = 0.6 # 惯性系数
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -67,11 +68,15 @@ class SimulationEngine:
         active_count = sum(1 for c in self.companies.values() if not c.is_bankrupt)
         default_share = 1.0 / active_count if active_count > 0 else 0.25
 
+        # 审计决策记录
         for name, d in self.round_decisions.items():
             self.decision_history.append({
-                'Round': self.current_round, 'Team': name,
-                'Low %': f"{d['low_ratio']:.0%}", 'High %': f"{d['high_ratio']:.0%}",
-                'VI Strategy': d['vi'], '本轮是否建工厂': "Yes" if d['build_factory'] else "No"
+                'Round': self.current_round, 
+                'Team': name,
+                'Low %': f"{d['low_ratio']:.0%}", 
+                'High %': f"{d['high_ratio']:.0%}",
+                'Vertical Integration': d['vi'], 
+                'Factory Construction': "Yes" if d['build_factory'] else "No"
             })
         
         w_low, w_high = {}, {}
@@ -93,7 +98,7 @@ class SimulationEngine:
                 round_results.append({
                     'Team': name, 'Op Profit': 0.0, 'Net Profit': 0.0, 'Cash Balance': comp.cash, 
                     'Total Share': 0.0, 'Low Share': 0.0, 'High Share': 0.0, 
-                    'PE': 0.0, '本轮是否建工厂': 'Bankrupt', 'Market Cap': 0.0
+                    'PE': 0.0, 'Factory Construction': 'Bankrupt', 'Market Cap': 0.0
                 })
                 continue
 
@@ -108,7 +113,7 @@ class SimulationEngine:
             
             d = self.round_decisions[name]
             
-            # --- 逻辑：匹配下拉菜单中的关键字 ---
+            # 成本判定
             cost_mfg = 3000000 if "Manufacturing" in d['vi'] else 0
             cost_soft = 1500000 if "Software" in d['vi'] else 0
             cost_factory = 5000000 if d['build_factory'] else 0
@@ -136,7 +141,7 @@ class SimulationEngine:
                 'Team': name, 'Op Profit': op_profit, 'Net Profit': net_profit, 
                 'Cash Balance': comp.cash, 'Total Share': (act_l * low_market + act_h * high_market) / 100000, 
                 'Low Share': act_l, 'High Share': act_h, 
-                'PE': comp.get_display_pe(), '本轮是否建工厂': "Yes" if d['build_factory'] else "No", 
+                'PE': comp.get_display_pe(), 'Factory Construction': "Yes" if d['build_factory'] else "No", 
                 'Market Cap': market_cap
             })
 
@@ -156,20 +161,20 @@ class SimulationEngine:
             c = self.companies[name]
             pe = max(5, 10 + c.extra_pe - (2 if c.ever_had_consecutive_loss else 0))
             mc = 0 if c.is_bankrupt else c.last_round_profit * pe
-            final_list.append({'Team': name, 'Final_Share': 0.0, 'Market Cap': mc})
+            final_list.append({'Team': name, 'Final Share': 0.0, 'Market Cap': mc})
         
         for i, entry in enumerate(final_list):
             name = entry['Team']
             if not self.companies[name].is_bankrupt:
-                entry['Final_Share'] = self.history[-1][self.history[-1]['Team'] == name]['Total Share'].values[0]
+                entry['Final Share'] = self.history[-1][self.history[-1]['Team'] == name]['Total Share'].values[0]
 
         df = pd.DataFrame(final_list)
-        ms, mmc = df['Final_Share'].max(), df['Market Cap'].max()
-        df['Score'] = 0.5*(df['Final_Share']/(ms if ms>0 else 1)) + 0.5*(df['Market Cap']/(mmc if mmc>0 else 1))
+        ms, mmc = df['Final Share'].max(), df['Market Cap'].max()
+        df['Score'] = 0.5*(df['Final Share']/(ms if ms>0 else 1)) + 0.5*(df['Market Cap']/(mmc if mmc>0 else 1))
         return df.sort_values('Score', ascending=False)
 
 # ==========================================
-# 2. UI 逻辑与视觉特效
+# 2. UI LOGIC & VISUALS (界面与视觉)
 # ==========================================
 
 fireworks_js = """
@@ -196,40 +201,17 @@ game = get_shared_game()
 st.set_page_config(page_title="Strategic Simulation", layout="wide")
 st.title("🚗 Automotive Strategic Simulation Dashboard")
 
-# --- CSS 样式注入：放大字体 ---
-st.markdown("""
-    <style>
-    .stSlider label, .stSelectbox label, .stCheckbox label {
-        font-size: 40px !important;
-        font-weight: 800 !important;
-        color: #1E3A8A !important;
-        line-height: 1.2 !important;
-        margin-bottom: 20px !important;
-    }
-    .stSlider, .stSelectbox, .stCheckbox {
-        margin-bottom: 40px !important;
-    }
-    div.stButton > button:first-child {
-        font-size: 24px;
-        font-weight: bold;
-        height: 3.5em;
-        width: 100%;
-        border-radius: 12px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
 def style_results(df):
     def color_ranks(val):
-        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
-        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' 
-        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' 
-        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' 
+        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # Gold
+        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # Silver
+        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # Bronze
+        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # Ice Blue
         return 'font-weight: bold'
 
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
             'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
-            '本轮是否建工厂', 'Market Cap', 'Mkt Cap Rank']
+            'Factory Construction', 'Market Cap', 'Mkt Cap Rank']
 
     return df[cols].style.format({
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
@@ -257,7 +239,7 @@ if role == "--- Select ---":
     st.info("Please select your role in the sidebar.")
     st.stop()
 
-# 进度状态
+# 状态指标
 st.subheader(f"Round {game.current_round} / 4")
 s_cols = st.columns(4)
 for i, t in enumerate(game.teams):
@@ -265,12 +247,12 @@ for i, t in enumerate(game.teams):
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     s_cols[i].metric(t, status)
 
-# 趋势图展示
+# 历史图表
 if game.history:
     st.divider()
     c1, c2 = st.columns(2)
-    low_chart_data = pd.DataFrame({t: [0.25] + [round_df[round_df['Team'] == t]['Low Share'].values[0] for round_df in game.history] for t in game.teams})
-    high_chart_data = pd.DataFrame({t: [0.25] + [round_df[round_df['Team'] == t]['High Share'].values[0] for round_df in game.history] for t in game.teams})
+    low_chart_data = pd.DataFrame({t: [0.25] + [df[df['Team'] == t]['Low Share'].values[0] for df in game.history] for t in game.teams})
+    high_chart_data = pd.DataFrame({t: [0.25] + [df[df['Team'] == t]['High Share'].values[0] for df in game.history] for t in game.teams})
     with c1:
         st.write("### 📉 Low-End Market Share Trend")
         st.line_chart(low_chart_data)
@@ -278,14 +260,14 @@ if game.history:
         st.write("### 📈 High-End Market Share Trend")
         st.line_chart(high_chart_data)
 
-# 结果看板
+# 结果表格
 if game.history:
     st.divider()
     latest = game.history[-1]
-    st.write(f"## 📊 Round {len(game.history)} Official Results")
+    st.write(f"## 📊 Round {len(game.history)} Results")
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
-# 团队决策输入
+# 决策表单
 if role.startswith("Team") and not game.game_over:
     if role in game.submitted_teams:
         st.success(f"Strategy for {role} locked.")
@@ -302,27 +284,30 @@ if role.startswith("Team") and not game.game_over:
             )
             l_alloc = l_alloc_int / 100.0
             
-            # Decision 2: 标签修改
+            # Decision 2
             vi_choice = st.selectbox(
                 "Decision 2: Vertical Integration Investment", 
                 ["None", "Manufacturing ($3,000,000)", "Software ($1,500,000)"]
             )
             
-            # Decision 3: 标签修改
-            build_f = st.checkbox("Decision 3: Construction of New Factory? ($5,000,000)")
+            # Decision 3: Checkbox at the end of the sentence
+            st.write("---")
+            col_text, col_box = st.columns([6, 1])
+            col_text.write("Decision 3: Construction of New Factory? ($5,000,000)")
+            build_f = col_box.checkbox("", key=f"fac_{role}")
             
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
 
-# 老师执行计算
+# 老师执行
 if len(game.submitted_teams) == 4 and not game.game_over and role == "Teacher/Observer":
     if st.button("🚀 PROCESS MARKET ROUND"):
         game.run_market_logic()
         st.balloons()
         st.rerun()
 
-# 最终回顾页面
+# 终局汇总
 if game.game_over:
     if 'celebrated' not in st.session_state:
         st.balloons()
@@ -330,12 +315,12 @@ if game.game_over:
         st.session_state['celebrated'] = True
 
     st.divider()
-    st.header("🏆 Final Review & Championship Standing")
+    st.header("🏆 Final Championship Standings")
     
     final_scores = game.get_final_scores()
-    st.write("### 🥇 Final Standings")
-    st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
+    st.write("### 🥇 Official Leaderboard")
+    st.dataframe(final_scores.style.format({"Final Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
     
-    st.write("### 📝 Strategic Audit")
+    st.write("### 📝 Strategic Audit Log")
     audit_df = pd.DataFrame(game.decision_history)
     st.dataframe(audit_df.sort_values(['Team', 'Round']), hide_index=True, use_container_width=True)
