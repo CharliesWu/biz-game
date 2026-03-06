@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 class Company:
     def __init__(self, name):
         self.name = name
-        self.cash = 7000000 
+        self.cash = 7000000 # 起始资金 7,000,000
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
         self.last_round_profit = 0 
@@ -53,7 +53,7 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 
+        self.alpha = 0.6 # 份额保留系数
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
@@ -71,7 +71,7 @@ class SimulationEngine:
             self.decision_history.append({
                 'Round': self.current_round, 'Team': name,
                 'Low %': f"{d['low_ratio']:.0%}", 'High %': f"{d['high_ratio']:.0%}",
-                'VI': d['vi'], 'Building This Round': "Yes" if d['build_factory'] else "No"
+                'Vertical Integration': d['vi'], '本轮是否建工厂': "Yes" if d['build_factory'] else "No"
             })
         
         w_low, w_high = {}, {}
@@ -93,7 +93,7 @@ class SimulationEngine:
                 round_results.append({
                     'Team': name, 'Op Profit': 0.0, 'Net Profit': 0.0, 'Cash Balance': comp.cash, 
                     'Total Share': 0.0, 'Low Share': 0.0, 'High Share': 0.0, 
-                    'PE': 0.0, 'Building This Round': 'Bankrupt', 'Market Cap': 0.0
+                    'PE': 0.0, '本轮是否建工厂': 'Bankrupt', 'Market Cap': 0.0
                 })
                 continue
 
@@ -133,7 +133,7 @@ class SimulationEngine:
                 'Team': name, 'Op Profit': op_profit, 'Net Profit': net_profit, 
                 'Cash Balance': comp.cash, 'Total Share': (act_l * low_market + act_h * high_market) / 100000, 
                 'Low Share': act_l, 'High Share': act_h, 
-                'PE': comp.get_display_pe(), 'Building This Round': "Yes" if d['build_factory'] else "No", 
+                'PE': comp.get_display_pe(), '本轮是否建工厂': "Yes" if d['build_factory'] else "No", 
                 'Market Cap': market_cap
             })
 
@@ -193,17 +193,35 @@ game = get_shared_game()
 st.set_page_config(page_title="Strategic Simulation", layout="wide")
 st.title("🚗 Automotive Strategic Simulation Dashboard")
 
+# --- CSS 样式注入：放大字体 ---
+st.markdown("""
+    <style>
+    /* 放大滑块、下拉菜单、勾选框的标签字体 */
+    .stSlider label, .stSelectbox label, .stCheckbox label {
+        font-size: 24px !important;
+        font-weight: bold !important;
+        color: #1E3A8A !important;
+    }
+    /* 放大按钮上的文字 */
+    div.stButton > button:first-child {
+        font-size: 18px;
+        height: 3em;
+        width: 100%;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 def style_results(df):
     def color_ranks(val):
-        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
-        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' 
-        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' 
-        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' 
+        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # 金
+        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # 银
+        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # 铜
+        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # 浅蓝
         return 'font-weight: bold'
 
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
             'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
-            'Building This Round', 'Market Cap', 'Mkt Cap Rank']
+            '本轮是否建工厂', 'Market Cap', 'Mkt Cap Rank']
 
     return df[cols].style.format({
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
@@ -232,7 +250,7 @@ if role == "--- Select ---":
     st.stop()
 
 # 进度状态
-st.subheader(f"Round {game.current_round} Progress")
+st.subheader(f"Round {game.current_round} / 4")
 s_cols = st.columns(4)
 for i, t in enumerate(game.teams):
     status = "✅ Ready" if t in game.submitted_teams else "⏳ Thinking"
@@ -269,16 +287,17 @@ if role.startswith("Team") and not game.game_over:
         with st.form("decision_form"):
             st.write(f"### Strategy Input: {role} (R{game.current_round})")
             
-            # --- 修改部分：滑块文本与百分比显示 ---
+            # --- 滑块修改：文本汉化+百分比显示 ---
             l_alloc_int = st.slider(
                 "Total capacity is 100%, and the capacity allocated to low-end models is:", 
                 0, 100, 50, 5, format="%d%%"
             )
-            # 将整数转回浮点数供逻辑计算
             l_alloc = l_alloc_int / 100.0
             
+            # --- 其它输入项：字体已通过 CSS 放大 ---
             vi_choice = st.selectbox("Vertical Integration", ["None", "Manufacturing", "Software"])
-            build_f = st.checkbox("Build New Factory ($5M)")
+            build_f = st.checkbox("Build New Factory ($5,000,000)")
+            
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
@@ -300,10 +319,12 @@ if game.game_over:
     st.divider()
     st.header("🏆 Final Review & Championship Standing")
     
+    # 最终排名
     final_scores = game.get_final_scores()
     st.write("### 🥇 Final Standings")
     st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
     
-    st.write("### 📝 Strategic Audit (Full Decision History)")
+    # 决策审计表
+    st.write("### 📝 Strategic Audit")
     audit_df = pd.DataFrame(game.decision_history)
     st.dataframe(audit_df.sort_values(['Team', 'Round']), hide_index=True, use_container_width=True)
