@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 class Company:
     def __init__(self, name):
         self.name = name
-        self.cash = 7000000 
+        self.cash = 7000000 # 起始资金 7M
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
         self.last_round_profit = 0 
@@ -71,7 +71,7 @@ class SimulationEngine:
             self.decision_history.append({
                 'Round': self.current_round, 'Team': name,
                 'Low %': f"{d['low_ratio']:.0%}", 'High %': f"{d['high_ratio']:.0%}",
-                'Vertical Integration': d['vi'], '本轮是否建工厂': "Yes" if d['build_factory'] else "No"
+                'VI Strategy': d['vi'], '本轮是否建工厂': "Yes" if d['build_factory'] else "No"
             })
         
         w_low, w_high = {}, {}
@@ -108,7 +108,7 @@ class SimulationEngine:
             
             d = self.round_decisions[name]
             
-            # --- 逻辑更新：匹配带成本说明的字符串 ---
+            # --- 逻辑：匹配下拉菜单中的关键字 ---
             cost_mfg = 3000000 if "Manufacturing" in d['vi'] else 0
             cost_soft = 1500000 if "Software" in d['vi'] else 0
             cost_factory = 5000000 if d['build_factory'] else 0
@@ -196,6 +196,29 @@ game = get_shared_game()
 st.set_page_config(page_title="Strategic Simulation", layout="wide")
 st.title("🚗 Automotive Strategic Simulation Dashboard")
 
+# --- CSS 样式注入：放大字体 ---
+st.markdown("""
+    <style>
+    .stSlider label, .stSelectbox label, .stCheckbox label {
+        font-size: 40px !important;
+        font-weight: 800 !important;
+        color: #1E3A8A !important;
+        line-height: 1.2 !important;
+        margin-bottom: 20px !important;
+    }
+    .stSlider, .stSelectbox, .stCheckbox {
+        margin-bottom: 40px !important;
+    }
+    div.stButton > button:first-child {
+        font-size: 24px;
+        font-weight: bold;
+        height: 3.5em;
+        width: 100%;
+        border-radius: 12px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 def style_results(df):
     def color_ranks(val):
         if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
@@ -235,7 +258,7 @@ if role == "--- Select ---":
     st.stop()
 
 # 进度状态
-st.subheader(f"Round {game.current_round} Progress")
+st.subheader(f"Round {game.current_round} / 4")
 s_cols = st.columns(4)
 for i, t in enumerate(game.teams):
     status = "✅ Ready" if t in game.submitted_teams else "⏳ Thinking"
@@ -272,21 +295,21 @@ if role.startswith("Team") and not game.game_over:
         with st.form("decision_form"):
             st.write(f"### Strategy Input: {role} (R{game.current_round})")
             
-            # Decision 1: 滑块
+            # Decision 1
             l_alloc_int = st.slider(
                 "Decision 1: Total capacity is 100%, and the capacity allocated to low-end models is:", 
                 0, 100, 50, 5, format="%d%%"
             )
             l_alloc = l_alloc_int / 100.0
             
-            # Decision 2: 垂直一体化 (加入成本明细)
+            # Decision 2: 标签修改
             vi_choice = st.selectbox(
-                "Decision 2: Vertical Integration", 
+                "Decision 2: Vertical Integration Investment", 
                 ["None", "Manufacturing ($3,000,000)", "Software ($1,500,000)"]
             )
             
-            # Decision 3: 建工厂 (格式统一)
-            build_f = st.checkbox("Decision 3: Build New Factory ($5,000,000)")
+            # Decision 3: 标签修改
+            build_f = st.checkbox("Decision 3: Construction of New Factory? ($5,000,000)")
             
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
@@ -313,6 +336,6 @@ if game.game_over:
     st.write("### 🥇 Final Standings")
     st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
     
-    st.write("### 📝 Strategic Audit (Full Decision History)")
+    st.write("### 📝 Strategic Audit")
     audit_df = pd.DataFrame(game.decision_history)
     st.dataframe(audit_df.sort_values(['Team', 'Round']), hide_index=True, use_container_width=True)
