@@ -193,20 +193,28 @@ game = get_shared_game()
 st.set_page_config(page_title="Strategic Simulation", layout="wide")
 st.title("🚗 Automotive Strategic Simulation Dashboard")
 
-# --- CSS 样式注入：放大字体 ---
+# --- CSS 样式注入：极限放大字体 (40px) ---
 st.markdown("""
     <style>
-    /* 放大滑块、下拉菜单、勾选框的标签字体 */
+    /* 极致放大标签字体 */
     .stSlider label, .stSelectbox label, .stCheckbox label {
-        font-size: 24px !important;
-        font-weight: bold !important;
+        font-size: 40px !important;
+        font-weight: 800 !important;
         color: #1E3A8A !important;
+        line-height: 1.2 !important;
+        margin-bottom: 20px !important;
+    }
+    /* 增加输入组件的间距防止拥挤 */
+    .stSlider, .stSelectbox, .stCheckbox {
+        margin-bottom: 40px !important;
     }
     /* 放大按钮上的文字 */
     div.stButton > button:first-child {
-        font-size: 18px;
-        height: 3em;
+        font-size: 24px;
+        font-weight: bold;
+        height: 3.5em;
         width: 100%;
+        border-radius: 12px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -287,14 +295,13 @@ if role.startswith("Team") and not game.game_over:
         with st.form("decision_form"):
             st.write(f"### Strategy Input: {role} (R{game.current_round})")
             
-            # --- 滑块修改：文本汉化+百分比显示 ---
+            # --- 滑块修改：40px 极致字体已生效 ---
             l_alloc_int = st.slider(
                 "Total capacity is 100%, and the capacity allocated to low-end models is:", 
                 0, 100, 50, 5, format="%d%%"
             )
             l_alloc = l_alloc_int / 100.0
             
-            # --- 其它输入项：字体已通过 CSS 放大 ---
             vi_choice = st.selectbox("Vertical Integration", ["None", "Manufacturing", "Software"])
             build_f = st.checkbox("Build New Factory ($5,000,000)")
             
