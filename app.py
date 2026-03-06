@@ -71,7 +71,7 @@ class SimulationEngine:
             self.decision_history.append({
                 'Round': self.current_round, 'Team': name,
                 'Low %': f"{d['low_ratio']:.0%}", 'High %': f"{d['high_ratio']:.0%}",
-                'VI': d['vi'], 'Building This Round': "Yes" if d['build_factory'] else "No"
+                'Vertical Integration': d['vi'], '本轮是否建工厂': "Yes" if d['build_factory'] else "No"
             })
         
         w_low, w_high = {}, {}
@@ -93,7 +93,7 @@ class SimulationEngine:
                 round_results.append({
                     'Team': name, 'Op Profit': 0.0, 'Net Profit': 0.0, 'Cash Balance': comp.cash, 
                     'Total Share': 0.0, 'Low Share': 0.0, 'High Share': 0.0, 
-                    'PE': 0.0, 'Building This Round': 'Bankrupt', 'Market Cap': 0.0
+                    'PE': 0.0, '本轮是否建工厂': 'Bankrupt', 'Market Cap': 0.0
                 })
                 continue
 
@@ -107,14 +107,17 @@ class SimulationEngine:
             op_profit = (act_l * low_market * u_l) + (act_h * high_market * u_h)
             
             d = self.round_decisions[name]
-            inv_cost = (3000000 if d['vi']=='Manufacturing' else 0) + \
-                       (1500000 if d['vi']=='Software' else 0) + \
-                       (5000000 if d['build_factory'] else 0)
             
-            if d['vi'] == 'Software': 
+            # --- 逻辑更新：匹配带成本说明的字符串 ---
+            cost_mfg = 3000000 if "Manufacturing" in d['vi'] else 0
+            cost_soft = 1500000 if "Software" in d['vi'] else 0
+            cost_factory = 5000000 if d['build_factory'] else 0
+            inv_cost = cost_mfg + cost_soft + cost_factory
+            
+            if "Software" in d['vi']: 
                 comp.extra_pe += 1
                 comp.soft_effects.append((self.current_round + 1, 5, 10))
-            if d['vi'] == 'Manufacturing': 
+            if "Manufacturing" in d['vi']: 
                 comp.mfg_effects.append((self.current_round + 1, self.current_round + 2, 50, 100))
             if d['build_factory']: 
                 comp.factory_effects.append(self.current_round + 1)
@@ -133,7 +136,7 @@ class SimulationEngine:
                 'Team': name, 'Op Profit': op_profit, 'Net Profit': net_profit, 
                 'Cash Balance': comp.cash, 'Total Share': (act_l * low_market + act_h * high_market) / 100000, 
                 'Low Share': act_l, 'High Share': act_h, 
-                'PE': comp.get_display_pe(), 'Building This Round': "Yes" if d['build_factory'] else "No", 
+                'PE': comp.get_display_pe(), '本轮是否建工厂': "Yes" if d['build_factory'] else "No", 
                 'Market Cap': market_cap
             })
 
@@ -203,7 +206,7 @@ def style_results(df):
 
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
             'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
-            'Building This Round', 'Market Cap', 'Mkt Cap Rank']
+            '本轮是否建工厂', 'Market Cap', 'Mkt Cap Rank']
 
     return df[cols].style.format({
         "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
@@ -269,21 +272,21 @@ if role.startswith("Team") and not game.game_over:
         with st.form("decision_form"):
             st.write(f"### Strategy Input: {role} (R{game.current_round})")
             
-            # --- Decision 1: Slider with Percentage Format ---
+            # Decision 1: 滑块
             l_alloc_int = st.slider(
                 "Decision 1: Total capacity is 100%, and the capacity allocated to low-end models is:", 
                 0, 100, 50, 5, format="%d%%"
             )
             l_alloc = l_alloc_int / 100.0
             
-            # --- Decision 2: Vertical Integration ---
+            # Decision 2: 垂直一体化 (加入成本明细)
             vi_choice = st.selectbox(
                 "Decision 2: Vertical Integration", 
-                ["None", "Manufacturing", "Software"]
+                ["None", "Manufacturing ($3,000,000)", "Software ($1,500,000)"]
             )
             
-            # --- Decision 3: New Factory ---
-            build_f = st.checkbox("Decision 3: Build New Factory ($5M)")
+            # Decision 3: 建工厂 (格式统一)
+            build_f = st.checkbox("Decision 3: Build New Factory ($5,000,000)")
             
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
