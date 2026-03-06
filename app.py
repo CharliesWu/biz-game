@@ -67,7 +67,6 @@ class SimulationEngine:
         active_count = sum(1 for c in self.companies.values() if not c.is_bankrupt)
         default_share = 1.0 / active_count if active_count > 0 else 0.25
 
-        # 记录决策用于审计
         for name, d in self.round_decisions.items():
             self.decision_history.append({
                 'Round': self.current_round, 'Team': name,
@@ -170,25 +169,16 @@ class SimulationEngine:
 # 2. UI 逻辑与视觉特效
 # ==========================================
 
-# 烟花特效代码 (JavaScript)
 fireworks_js = """
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <script>
     var duration = 5 * 1000;
     var animationEnd = Date.now() + duration;
     var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
-
-    function randomInRange(min, max) {
-      return Math.random() * (max - min) + min;
-    }
-
+    function randomInRange(min, max) { return Math.random() * (max - min) + min; }
     var interval = setInterval(function() {
       var timeLeft = animationEnd - Date.now();
-
-      if (timeLeft <= 0) {
-        return clearInterval(interval);
-      }
-
+      if (timeLeft <= 0) { return clearInterval(interval); }
       var particleCount = 50 * (timeLeft / duration);
       confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } }));
       confetti(Object.assign({}, defaults, { particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } }));
@@ -205,10 +195,10 @@ st.title("🚗 Automotive Strategic Simulation Dashboard")
 
 def style_results(df):
     def color_ranks(val):
-        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # 金
-        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # 银
-        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # 铜
-        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' # 浅蓝
+        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
+        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' 
+        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' 
+        if val == 4: return 'background-color: #E1F5FE; color: #01579B; font-weight: bold' 
         return 'font-weight: bold'
 
     cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
@@ -249,7 +239,7 @@ for i, t in enumerate(game.teams):
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     s_cols[i].metric(t, status)
 
-# 趋势图展示 (如果有历史数据)
+# 趋势图展示
 if game.history:
     st.divider()
     c1, c2 = st.columns(2)
@@ -278,7 +268,15 @@ if role.startswith("Team") and not game.game_over:
     else:
         with st.form("decision_form"):
             st.write(f"### Strategy Input: {role} (R{game.current_round})")
-            l_alloc = st.slider("Low-End allocation %", 0.0, 1.0, 0.5, 0.05)
+            
+            # --- 修改部分：滑块文本与百分比显示 ---
+            l_alloc_int = st.slider(
+                "Total capacity is 100%, and the capacity allocated to low-end models is:", 
+                0, 100, 50, 5, format="%d%%"
+            )
+            # 将整数转回浮点数供逻辑计算
+            l_alloc = l_alloc_int / 100.0
+            
             vi_choice = st.selectbox("Vertical Integration", ["None", "Manufacturing", "Software"])
             build_f = st.checkbox("Build New Factory ($5M)")
             if st.form_submit_button("Submit Strategy"):
@@ -292,9 +290,8 @@ if len(game.submitted_teams) == 4 and not game.game_over and role == "Teacher/Ob
         st.balloons()
         st.rerun()
 
-# 最终回顾页面 (只有游戏结束才显示)
+# 最终回顾页面
 if game.game_over:
-    # 庆祝效果：烟花 + 气球
     if 'celebrated' not in st.session_state:
         st.balloons()
         components.html(fireworks_js, height=0)
@@ -303,12 +300,10 @@ if game.game_over:
     st.divider()
     st.header("🏆 Final Review & Championship Standing")
     
-    # 最终排名
     final_scores = game.get_final_scores()
     st.write("### 🥇 Final Standings")
     st.dataframe(final_scores.style.format({"Final_Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
     
-    # 决策审计表
     st.write("### 📝 Strategic Audit (Full Decision History)")
     audit_df = pd.DataFrame(game.decision_history)
     st.dataframe(audit_df.sort_values(['Team', 'Round']), hide_index=True, use_container_width=True)
