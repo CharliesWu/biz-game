@@ -269,16 +269,22 @@ if role.startswith("Team") and not game.game_over:
         with st.form("decision_form"):
             st.write(f"### Strategy Input: {role} (R{game.current_round})")
             
-            # --- 修改部分：滑块文本与百分比显示 ---
+            # --- Decision 1: Slider with Percentage Format ---
             l_alloc_int = st.slider(
-                "Total capacity is 100%, and the capacity allocated to low-end models is:", 
+                "Decision 1: Total capacity is 100%, and the capacity allocated to low-end models is:", 
                 0, 100, 50, 5, format="%d%%"
             )
-            # 将整数转回浮点数供逻辑计算
             l_alloc = l_alloc_int / 100.0
             
-            vi_choice = st.selectbox("Vertical Integration", ["None", "Manufacturing", "Software"])
-            build_f = st.checkbox("Build New Factory ($5M)")
+            # --- Decision 2: Vertical Integration ---
+            vi_choice = st.selectbox(
+                "Decision 2: Vertical Integration", 
+                ["None", "Manufacturing", "Software"]
+            )
+            
+            # --- Decision 3: New Factory ---
+            build_f = st.checkbox("Decision 3: Build New Factory ($5M)")
+            
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
