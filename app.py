@@ -3,12 +3,12 @@ import pandas as pd
 import streamlit.components.v1 as components
 
 # ==========================================
-# 1. CORE BUSINESS LOGIC
+# 1. CORE BUSINESS LOGIC (核心业务逻辑)
 # ==========================================
 class Company:
     def __init__(self, name):
         self.name = name
-        self.cash = 7000000 # Starting Cash: $7M
+        self.cash = 7000000 
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
         self.last_round_profit = 0 
@@ -17,7 +17,7 @@ class Company:
         self.soft_effects = []  
         self.factory_effects = [] 
         
-        # Round 0 baseline market shares for 8 teams (1/8 = 0.125)
+        # 8人初始基准 (1/8 = 0.125)
         self.prev_low_share = 0.125
         self.prev_high_share = 0.125
 
@@ -46,7 +46,6 @@ class Company:
 
 class SimulationEngine:
     def __init__(self):
-        # Increased to 8 Teams
         self.teams = [f"Team {i}" for i in range(1, 9)]
         self.companies = {name: Company(name) for name in self.teams}
         self.current_round = 1
@@ -65,7 +64,7 @@ class SimulationEngine:
         active_teams = [t for t in self.teams if not self.companies[t].is_bankrupt]
         if len(self.submitted_teams) < len(active_teams): return False
         
-        # Market Scaled to 200,000 (Low: 160k, High: 40k)
+        # 200,000 辆车规模
         low_market, high_market = 160000, 40000
         round_results = []
         default_share = 1.0 / len(active_teams) if active_teams else 0.125
@@ -103,7 +102,7 @@ class SimulationEngine:
             if comp.is_bankrupt:
                 round_results.append({
                     'Team': name, 'Op Profit': 0.0, 'Net Profit': 0.0, 'Cash Balance': comp.cash, 
-                    'Total Share': 0.0, 'Low Share': 0.0, 'High Share': 0.0, 
+                    'Total Mkt %': 0.0, 'Low Mkt %': 0.0, 'High Mkt %': 0.0, 
                     'PE': 0.0, 'Factory Construction': 'Bankrupt', 'Market Cap': 0.0
                 })
                 continue
@@ -141,14 +140,15 @@ class SimulationEngine:
             
             round_results.append({
                 'Team': name, 'Op Profit': op_profit, 'Net Profit': net_profit, 
-                'Cash Balance': comp.cash, 'Total Share': (act_l * low_market + act_h * high_market) / 200000, 
-                'Low Share': act_l, 'High Share': act_h, 
+                'Cash Balance': comp.cash, 'Total Mkt %': (act_l * low_market + act_h * high_market) / 200000, 
+                'Low Mkt %': act_l, 'High Mkt %': act_h, 
                 'PE': comp.get_display_pe(), 'Factory Construction': "Yes" if d['build_factory'] else "No", 
                 'Market Cap': market_cap
             })
 
         df = pd.DataFrame(round_results)
-        df['Share Rank'] = df['Total Share'].rank(ascending=False, method='min').astype(int)
+        # 更新 Rank 计算所使用的列名
+        df['Mkt % Rank'] = df['Total Mkt %'].rank(ascending=False, method='min').astype(int)
         df['Mkt Cap Rank'] = df['Market Cap'].rank(ascending=False, method='min').astype(int)
         
         self.history.append(df)
@@ -163,20 +163,20 @@ class SimulationEngine:
             c = self.companies[name]
             pe = max(5, 10 + c.extra_pe - (2 if c.ever_had_consecutive_loss else 0))
             mc = 0 if c.is_bankrupt else c.last_round_profit * pe
-            final_list.append({'Team': name, 'Final Share': 0.0, 'Market Cap': mc})
+            final_list.append({'Team': name, 'Final Mkt %': 0.0, 'Market Cap': mc})
         
         for i, entry in enumerate(final_list):
             name = entry['Team']
             if not self.companies[name].is_bankrupt:
-                entry['Final Share'] = self.history[-1][self.history[-1]['Team'] == name]['Total Share'].values[0]
+                entry['Final Mkt %'] = self.history[-1][self.history[-1]['Team'] == name]['Total Mkt %'].values[0]
 
         df = pd.DataFrame(final_list)
-        ms, mmc = df['Final Share'].max(), df['Market Cap'].max()
-        df['Score'] = 0.5*(df['Final Share']/(ms if ms>0 else 1)) + 0.5*(df['Market Cap']/(mmc if mmc>0 else 1))
+        ms, mmc = df['Final Mkt %'].max(), df['Market Cap'].max()
+        df['Score'] = 0.5*(df['Final Mkt %']/(ms if ms>0 else 1)) + 0.5*(df['Market Cap']/(mmc if mmc>0 else 1))
         return df.sort_values('Score', ascending=False)
 
 # ==========================================
-# 2. UI LOGIC & VISUALS
+# 2. UI LOGIC & VISUALS (界面与视觉)
 # ==========================================
 
 fireworks_js = """
@@ -205,24 +205,25 @@ st.title("🚗 Automotive Strategic Simulation Dashboard")
 
 def style_results(df):
     def color_ranks(val):
-        # 8-Team Ranked Tier Colors
-        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' # Gold
-        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' # Silver
-        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' # Bronze
-        if 4 <= val <= 6: return 'background-color: #C8E6C9; color: #1B5E20; font-weight: bold' # Green Zone
-        if val >= 7: return 'background-color: #FFCDD2; color: #B71C1C; font-weight: bold' # Red Zone
+        # 1-3金银铜，4-6绿色，7-8红色
+        if val == 1: return 'background-color: #FFD700; color: black; font-weight: bold' 
+        if val == 2: return 'background-color: #C0C0C0; color: black; font-weight: bold' 
+        if val == 3: return 'background-color: #CD7F32; color: white; font-weight: bold' 
+        if 4 <= val <= 6: return 'background-color: #C8E6C9; color: #1B5E20; font-weight: bold'
+        if val >= 7: return 'background-color: #FFCDD2; color: #B71C1C; font-weight: bold'
         return 'font-weight: bold'
 
-    cols = ['Team', 'Low Share', 'High Share', 'Total Share', 'Share Rank', 
+    # 更新显示的列名
+    cols = ['Team', 'Low Mkt %', 'High Mkt %', 'Total Mkt %', 'Mkt % Rank', 
             'Op Profit', 'Net Profit', 'Cash Balance', 'PE', 
             'Factory Construction', 'Market Cap', 'Mkt Cap Rank']
 
     return df[cols].style.format({
-        "Low Share": "{:.2%}", "High Share": "{:.2%}", "Total Share": "{:.2%}", 
+        "Low Mkt %": "{:.2%}", "High Mkt %": "{:.2%}", "Total Mkt %": "{:.2%}", 
         "Op Profit": "${:,.0f}", "Net Profit": "${:,.0f}", "Cash Balance": "${:,.0f}", 
         "PE": "{:.1f}", "Market Cap": "${:,.0f}"
-    }).map(color_ranks, subset=['Mkt Cap Rank', 'Share Rank'])\
-      .set_properties(subset=['Total Share', 'PE'], **{'font-weight': 'bold'})
+    }).map(color_ranks, subset=['Mkt % Rank', 'Mkt Cap Rank'])\
+      .set_properties(subset=['Total Mkt %', 'PE'], **{'font-weight': 'bold'})
 
 # Sidebar
 st.sidebar.title("Sim Control")
@@ -244,28 +245,24 @@ if role == "--- Select ---":
     st.info("Please select your role in the sidebar.")
     st.stop()
 
-# Progress Dashboard (2-row grid)
+# 进度状态 (2行4列)
 st.subheader(f"Round {game.current_round} / 4 Progress")
 row1 = st.columns(4)
 row2 = st.columns(4)
-
 for i, t in enumerate(game.teams):
     status = "✅ Ready" if t in game.submitted_teams else "⏳ Thinking"
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
-    
-    if i < 4:
-        row1[i].metric(t, status)
-    else:
-        row2[i-4].metric(t, status)
+    if i < 4: row1[i].metric(t, status)
+    else: row2[i-4].metric(t, status)
 
-# Official Results
+# 官方结果展示
 if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Official Results")
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
-# Team Decision Input
+# 决策输入
 if role.startswith("Team") and not game.game_over:
     if role in game.submitted_teams:
         st.success(f"Strategy for {role} locked.")
@@ -282,14 +279,14 @@ if role.startswith("Team") and not game.game_over:
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
 
-# Teacher Execution
+# 教师处理逻辑
 if len(game.submitted_teams) >= len([t for t in game.teams if not game.companies[t].is_bankrupt]) and not game.game_over and role == "Teacher/Observer" and len(game.submitted_teams) > 0:
     if st.button("🚀 PROCESS MARKET ROUND"):
         game.run_market_logic()
         st.balloons()
         st.rerun()
 
-# End-Game Recap
+# 终局排行榜
 if game.game_over:
     if 'celebrated' not in st.session_state:
         st.balloons()
@@ -299,7 +296,7 @@ if game.game_over:
     st.header("🏆 Final Championship Standings")
     final_scores = game.get_final_scores()
     st.write("### 🥇 Official Leaderboard")
-    st.dataframe(final_scores.style.format({"Final Share": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
+    st.dataframe(final_scores.style.format({"Final Mkt %": "{:.2%}", "Market Cap": "${:,.0f}", "Score": "{:.4f}"}), hide_index=True, use_container_width=True)
     st.write("### 📝 Strategic Audit Log")
     audit_df = pd.DataFrame(game.decision_history)
     st.dataframe(audit_df.sort_values(['Team', 'Round']), hide_index=True, use_container_width=True)
