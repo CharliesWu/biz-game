@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 class Company:
     def __init__(self, name):
         self.name = name
-        self.cash = 7000000 
+        self.cash = 7000000 # Starting Cash: $7,000,000
         self.is_bankrupt = False
         self.ever_had_consecutive_loss = False
         self.last_round_profit = 0 
@@ -17,7 +17,7 @@ class Company:
         self.soft_effects = []  
         self.factory_effects = [] 
         
-        # Initial market share baseline for inertia
+        # Round 0 baseline market shares
         self.prev_low_share = 0.25
         self.prev_high_share = 0.25
 
@@ -54,23 +54,22 @@ class SimulationEngine:
         self.round_decisions = {} 
         self.submitted_teams = set()
         self.game_over = False
-        self.alpha = 0.6 
+        self.alpha = 0.6 # Market inertia coefficient
 
     def submit_team_decision(self, team_name, dec):
         self.round_decisions[team_name] = dec
         self.submitted_teams.add(team_name)
 
     def run_market_logic(self):
-        # 允许在只有活跃团队提交的情况下进行计算 (防止因破产卡死)
+        # Allow processing if all non-bankrupt teams have submitted
         active_teams = [t for t in self.teams if not self.companies[t].is_bankrupt]
         if len(self.submitted_teams) < len(active_teams): return False
         
         low_market, high_market = 80000, 20000
         round_results = []
-        active_count = len(active_teams)
-        default_share = 1.0 / active_count if active_count > 0 else 0.25
+        default_share = 1.0 / len(active_teams) if active_teams else 0.25
 
-        # 记录决策历史
+        # Decision Logging (English labels)
         for name in self.teams:
             comp = self.companies[name]
             if name in self.round_decisions:
@@ -86,7 +85,7 @@ class SimulationEngine:
                     'Low %': "0%", 'High %': "0%", 'Vertical Integration': "Bankrupt", 'Factory Construction': "N/A"
                 })
         
-        # 计算市场权重
+        # Share Weights Calculation
         w_low, w_high = {}, {}
         for name in self.teams:
             comp = self.companies[name]
@@ -100,7 +99,7 @@ class SimulationEngine:
 
         s_low_total, s_high_total = sum(w_low.values()), sum(w_high.values())
 
-        # 结算财务与份额
+        # Round Settlement
         for name in self.teams:
             comp = self.companies[name]
             if comp.is_bankrupt:
@@ -244,7 +243,7 @@ if role == "--- Select ---":
     st.info("Please select your role in the sidebar.")
     st.stop()
 
-# Status Metrics
+# Status Dashboard
 st.subheader(f"Round {game.current_round} / 4")
 s_cols = st.columns(4)
 for i, t in enumerate(game.teams):
@@ -252,37 +251,39 @@ for i, t in enumerate(game.teams):
     if game.companies[t].is_bankrupt: status = "💀 Bankrupt"
     s_cols[i].metric(t, status)
 
-# Trend Charts (Robust fix for Team 1)
+# Trend Charts (FIXED: Team 1 robust logic)
 if game.history:
     st.divider()
     c1, c2 = st.columns(2)
     
-    # 确保所有团队都在 DataFrame 中显示，即使是第 0 轮
-    low_data = {t: [0.25] for t in game.teams}
-    high_data = {t: [0.25] for t in game.teams}
+    # Rebuild dataframes to ensure all teams are included
+    low_data_dict = {t: [0.25] for t in game.teams}
+    high_data_dict = {t: [0.25] for t in game.teams}
     
     for round_df in game.history:
         for t in game.teams:
-            val_l = round_df[round_df['Team'] == t]['Low Share'].values[0]
-            val_h = round_df[round_df['Team'] == t]['High Share'].values[0]
-            low_data[t].append(val_l)
-            high_data[t].append(val_h)
+            # Extract values safely
+            team_row = round_df[round_df['Team'] == t]
+            low_val = team_row['Low Share'].values[0] if not team_row.empty else 0.0
+            high_val = team_row['High Share'].values[0] if not team_row.empty else 0.0
+            low_data_dict[t].append(low_val)
+            high_data_dict[t].append(high_val)
     
     with c1:
         st.write("### 📉 Low-End Market Share Trend")
-        st.line_chart(pd.DataFrame(low_data))
+        st.line_chart(pd.DataFrame(low_data_dict))
     with c2:
         st.write("### 📈 High-End Market Share Trend")
-        st.line_chart(pd.DataFrame(high_data))
+        st.line_chart(high_chart_data := pd.DataFrame(high_data_dict))
 
-# Results Dashboard
+# Official Results
 if game.history:
     st.divider()
     latest = game.history[-1]
     st.write(f"## 📊 Round {len(game.history)} Official Results")
     st.dataframe(style_results(latest), hide_index=True, use_container_width=True)
 
-# Decision Form
+# Strategy Entry
 if role.startswith("Team") and not game.game_over:
     if role in game.submitted_teams:
         st.success(f"Strategy for {role} locked.")
@@ -305,24 +306,24 @@ if role.startswith("Team") and not game.game_over:
                 ["None", "Manufacturing ($3,000,000)", "Software ($1,500,000)"]
             )
             
-            # Decision 3: Checkbox at the end
+            # Decision 3: SNAPPED CHECKBOX (Tight alignment)
             st.write("---")
-            col_text, col_box = st.columns([6, 1])
-            col_text.write("Decision 3: Construction of New Factory? ($5,000,000)")
-            build_f = col_box.checkbox("", key=f"fac_{role}")
+            col_label, col_box = st.columns([15, 1])
+            col_label.write("Decision 3: Construction of New Factory? ($5,000,000)")
+            build_f = col_box.checkbox("", key=f"fac_{role}", label_visibility="collapsed")
             
             if st.form_submit_button("Submit Strategy"):
                 game.submit_team_decision(role, {"low_ratio": l_alloc, "high_ratio": 1.0-l_alloc, "vi": vi_choice, "build_factory": build_f})
                 st.rerun()
 
-# Teacher Calculation
+# Teacher Execute
 if len(game.submitted_teams) >= len([t for t in game.teams if not game.companies[t].is_bankrupt]) and not game.game_over and role == "Teacher/Observer" and len(game.submitted_teams) > 0:
     if st.button("🚀 PROCESS MARKET ROUND"):
         game.run_market_logic()
         st.balloons()
         st.rerun()
 
-# Final Summary
+# End-Game Recap
 if game.game_over:
     if 'celebrated' not in st.session_state:
         st.balloons()
