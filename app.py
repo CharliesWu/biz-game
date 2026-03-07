@@ -226,11 +226,11 @@ def style_results(df):
 
 # Sidebar
 st.sidebar.title("Sim Control")
-role_options = ["--- Select ---", "Teacher/Observer"] + game.teams
+role_options = ["--- Select ---", "Admin (Don't Select Me)"] + game.teams
 role = st.sidebar.selectbox("Select Role", role_options)
 
 st.sidebar.markdown("---")
-if role == "Teacher/Observer":
+if role == "Admin (Don't Select Me)":
     st.sidebar.subheader("🚨 Danger Zone")
     confirm_reset = st.sidebar.checkbox("Double check to enable reset")
     if st.sidebar.button("RESET ALL GAME DATA", disabled=not confirm_reset):
@@ -279,7 +279,7 @@ if role.startswith("Team") and not game.game_over:
                 st.rerun()
 
 # Teacher Execute
-if len(game.submitted_teams) >= len([t for t in game.teams if not game.companies[t].is_bankrupt]) and not game.game_over and role == "Teacher/Observer" and len(game.submitted_teams) > 0:
+if len(game.submitted_teams) >= len([t for t in game.teams if not game.companies[t].is_bankrupt]) and not game.game_over and role == "Admin (Don't Select Me)" and len(game.submitted_teams) > 0:
     if st.button("🚀 PROCESS MARKET ROUND"):
         game.run_market_logic()
         st.balloons()
